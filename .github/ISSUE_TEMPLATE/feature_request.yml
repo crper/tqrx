@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest an improvement for tqrx.
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow feels missing or painful today?
+      placeholder: I often need to generate Wi-Fi QR codes without remembering the payload format.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful behavior change.
+      placeholder: Add a `wifi` preset that builds the payload from flags.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Note any workarounds or rejected ideas.
+

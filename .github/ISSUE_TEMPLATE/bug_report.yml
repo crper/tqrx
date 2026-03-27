@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible bug in tqrx.
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is broken, and what did you expect instead?
+      placeholder: Running `tqrx tui` exits immediately on macOS 15.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide exact commands, inputs, and key presses.
+      placeholder: |
+        1. Run `tqrx "https://example.com" -f svg -o out.png`
+        2. Observe the error or output
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Go version, and terminal if relevant.
+      placeholder: macOS 15, Go 1.26.1, iTerm2
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste stderr output or attach terminal screenshots when useful.
+

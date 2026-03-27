@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  # PR 和 main 分支提交都要跑基础质量门禁，尽早发现回归。
+  pull_request:
+  push:
+    branches:
+      - main
+
+# 当前 workflow 只需要读取仓库内容；发布权限留给 release workflow。
+permissions:
+  contents: read
+
+jobs:
+  # test 负责“项目能不能正常工作”这条主线：
+  # 依赖是否整洁、测试是否通过、能不能构建、文档注释检查是否通过。
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          # 始终跟随 go.mod 里的 Go 版本，减少本地和 CI 的漂移。
+          go-version-file: go.mod
+      # go mod tidy + git diff 组合用来防止依赖文件被忘记更新。
+      - run: go mod tidy
+      - run: git diff --exit-code -- go.mod go.sum
+      - run: go test ./...
+      - run: go vet ./...
+      - run: go build ./...
+      - run: bash scripts/check-docs.sh
+
+  # lint 只负责静态检查，避免和 test 混在一起后日志难读。
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          # 显式固定 golangci-lint 版本，避免 latest 带来突发 breaking change。
+          version: v2.11.4
+
+  # snapshot 负责验证发布配置本身是可用的，但不会真的创建 GitHub Release。
+  # 这样平时改构建脚本或 goreleaser 配置时也能提前发现问题。
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # GoReleaser 需要完整历史来推导版本和 changelog。
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          # check 只校验配置合法性。
+          args: check
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          # snapshot 构建真实产物，但不会发布到 GitHub。
+          args: build --snapshot --clean

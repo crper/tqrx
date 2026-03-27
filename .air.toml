@@ -1,0 +1,25 @@
+#:schema https://json.schemastore.org/any.json
+
+root = "."
+testdata_dir = "internal/tui/testdata"
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/tqrx ."
+  entrypoint = ["./tmp/tqrx", "tui"]
+  include_ext = ["go", "mod", "sum"]
+  exclude_dir = [".git", ".gstack", "dist", "internal/tui/testdata", "tmp", "vendor"]
+  exclude_regex = ["_test\\.go"]
+  exclude_unchanged = true
+  delay = 1000
+  stop_on_error = true
+  send_interrupt = true
+  kill_delay = "500ms"
+  log = "build-errors.log"
+
+[misc]
+  clean_on_exit = true
+
+[screen]
+  clear_on_rebuild = true
+  keep_scroll = true

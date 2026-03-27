@@ -1,0 +1,34 @@
+name: release
+
+on:
+  # 只有打语义化版本 tag 时才正式发布。
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # release 只做一件事：调用 GoReleaser 生成发布产物并推到 GitHub Release，
+  # 同时把 Homebrew Cask 同步到独立 tap 仓库。
+  goreleaser:
+    runs-on: ubuntu-latest
+    permissions:
+      # 创建 release、上传产物都需要 contents: write。
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # 发布场景同样需要完整 git 历史。
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          # release --clean 会创建 GitHub Release、上传产物并写入 tap 仓库。
+          args: release --clean
+        env:
+          # GITHUB_TOKEN 负责当前仓库 release；TAP_GITHUB_TOKEN 负责跨仓库推 cask。
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}

@@ -1,0 +1,17 @@
+.gstack/
+.DS_Store
+.idea/
+.vscode/
+coverage.out
+*.coverprofile
+*.prof
+*.test
+bin/
+dist/
+/tmp/
+/qr
+/tqrx
+qrcode.png
+qrcode.svg
+
+docs/superpowers
