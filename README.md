@@ -91,6 +91,7 @@ printf 'from-pipe\n' | ./tqrx
 
 - `Tab` / `Shift+Tab` 切换焦点
 - `Ctrl+S` 保存
+- `Ctrl+R` 重置所有设置为默认值
 - `Ctrl+T` 切换 `AUTO / LIGHT / DARK`
 - `Enter` 在内容区输入换行，在 `Save` 上执行保存
 - 支持鼠标点击切焦点，也支持终端粘贴事件
@@ -101,6 +102,7 @@ printf 'from-pipe\n' | ./tqrx
 - `mods X/Y` 表示当前二维码模块尺寸与预览容量
 - 终端过小会提示 `native preview exceeds viewport; enlarge terminal`
 - 纠错等级过高导致预览过密时，会给出 `suggest M for scan` 这类建议
+- 内容过长时（> 500 字符）会显示 `content long` 警告，超过 1000 字符显示 `content very long`
 
 环境变量：
 

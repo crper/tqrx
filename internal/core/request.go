@@ -66,6 +66,38 @@ const (
 	ErrorInvalidLevel ErrorKind = "invalid_level"
 )
 
+const (
+	// ContentLengthWarning 表示内容长度警告阈值。
+	ContentLengthWarning = 500
+	// ContentLengthCritical 表示内容长度严重警告阈值。
+	ContentLengthCritical = 1000
+)
+
+// ContentWarning 表示内容长度警告级别。
+type ContentWarning string
+
+const (
+	// WarningNone 表示无警告。
+	WarningNone ContentWarning = ""
+	// WarningHigh 表示内容较长警告。
+	WarningHigh ContentWarning = "high"
+	// WarningCritical 表示内容过长严重警告。
+	WarningCritical ContentWarning = "critical"
+)
+
+// CheckContentLength 检查内容长度并返回相应的警告级别。
+func CheckContentLength(content string) ContentWarning {
+	length := len(content)
+	switch {
+	case length > ContentLengthCritical:
+		return WarningCritical
+	case length > ContentLengthWarning:
+		return WarningHigh
+	default:
+		return WarningNone
+	}
+}
+
 // UserError 封装用户可以自行修复的问题，包含可读消息和可选的底层原因。
 type UserError struct {
 	Kind    ErrorKind
@@ -131,6 +163,11 @@ type NormalizedRequest struct {
 	Source Source
 }
 
+// DefaultOutputPath 返回给定导出格式对应的默认目标文件路径。
+func DefaultOutputPath(format Format) string {
+	return "./qrcode." + string(format)
+}
+
 // Normalize 会填充默认值、裁剪特定来源的噪声，并把原始字符串转换为其余模
 // 块使用的稳定请求结构。
 func Normalize(req Request) (NormalizedRequest, error) {
@@ -184,7 +221,7 @@ func Normalize(req Request) (NormalizedRequest, error) {
 
 	outputPath := req.OutputPath
 	if outputPath == "" {
-		outputPath = "./qrcode." + string(format)
+		outputPath = DefaultOutputPath(format)
 	}
 
 	return NormalizedRequest{

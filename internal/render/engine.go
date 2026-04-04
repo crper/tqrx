@@ -53,22 +53,17 @@ func (e *Engine) Prepare(req core.NormalizedRequest) (*Prepared, error) {
 		return e.lastPrepared, nil
 	}
 
-	qr, err := qrcode.NewWith(req.Content, toECOption(req.Level))
+	bitmap, err := bitmapFor(req.Content, req.Level)
 	if err != nil {
 		return nil, err
 	}
-
-	capture := &captureWriter{}
-	if err := qr.Save(capture); err != nil {
-		return nil, err
-	}
-	if err := validateSize(req, capture.bitmap); err != nil {
+	if err := validateSize(req, bitmap); err != nil {
 		return nil, err
 	}
 
 	prepared := &Prepared{
 		request: req,
-		bitmap:  capture.bitmap,
+		bitmap:  bitmap,
 	}
 	e.lastKey = key
 	e.lastPrepared = prepared
@@ -87,46 +82,62 @@ func (p *Prepared) PNG() ([]byte, error) {
 // SVG 把共享位图渲染成清晰的矩形模块，确保矢量导出和 PNG 使用同一套几何
 // 规则。
 func (p *Prepared) SVG() ([]byte, error) {
-	var buf bytes.Buffer
-	buf.WriteString(xml.Header)
-	if _, err := fmt.Fprintf(
-		&buf,
-		`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" shape-rendering="crispEdges">`,
-		p.request.Size,
-		p.request.Size,
-		p.request.Size,
-		p.request.Size,
-	); err != nil {
-		return nil, err
-	}
-	if _, err := fmt.Fprintf(&buf, `<rect width="%d" height="%d" fill="#ffffff"/>`, p.request.Size, p.request.Size); err != nil {
-		return nil, err
-	}
+	total := p.totalModules()
+	activeModules := p.countActiveModules()
+	estimatedSize := estimateSVGSize(p.request.Size, activeModules)
 
-	total := len(p.bitmap) + quietZoneModules*2
+	var buf strings.Builder
+	buf.Grow(estimatedSize)
+	buf.WriteString(xml.Header)
+
+	fmt.Fprintf(&buf,
+		`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" shape-rendering="crispEdges">`,
+		p.request.Size, p.request.Size, p.request.Size, p.request.Size)
+	fmt.Fprintf(&buf, `<rect width="%d" height="%d" fill="#ffffff"/>`, p.request.Size, p.request.Size)
+
 	for y := 0; y < total; y++ {
 		startY, endY := band(y, p.request.Size, total)
 		for x := 0; x < total; x++ {
-			srcY, srcX := y-quietZoneModules, x-quietZoneModules
-			if srcY < 0 || srcY >= len(p.bitmap) || srcX < 0 || srcX >= len(p.bitmap[srcY]) || !p.bitmap[srcY][srcX] {
+			if !p.moduleActive(y, x) {
 				continue
 			}
 			startX, endX := band(x, p.request.Size, total)
-			if _, err := fmt.Fprintf(
-				&buf,
+			fmt.Fprintf(&buf,
 				`<rect x="%d" y="%d" width="%d" height="%d" fill="#000000"/>`,
-				startX,
-				startY,
-				endX-startX,
-				endY-startY,
-			); err != nil {
-				return nil, err
-			}
+				startX, startY, endX-startX, endY-startY)
 		}
 	}
 
 	buf.WriteString(`</svg>`)
-	return buf.Bytes(), nil
+	return []byte(buf.String()), nil
+}
+
+func (p *Prepared) countActiveModules() int {
+	if len(p.bitmap) == 0 {
+		return 0
+	}
+	count := 0
+	for _, row := range p.bitmap {
+		for _, active := range row {
+			if active {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+func (p *Prepared) moduleActive(y, x int) bool {
+	srcY, srcX := y-quietZoneModules, x-quietZoneModules
+	return srcY >= 0 && srcY < len(p.bitmap) &&
+		srcX >= 0 && srcX < len(p.bitmap[srcY]) &&
+		p.bitmap[srcY][srcX]
+}
+
+func estimateSVGSize(imageSize, activeModules int) int {
+	const svgHeaderSize = 256
+	const rectElementSize = 64
+	return svgHeaderSize + activeModules*rectElementSize
 }
 
 // Preview 构建适合终端显示的块状预览，并缓存结果字符串，因为 TUI 可能反复
@@ -136,7 +147,7 @@ func (p *Prepared) Preview() string {
 		return p.preview
 	}
 
-	total := len(p.bitmap) + quietZoneModules*2
+	total := p.totalModules()
 	p.preview = p.renderHalfBlockPreview(total, total)
 	return p.preview
 }
@@ -144,7 +155,7 @@ func (p *Prepared) Preview() string {
 // PreviewModules 返回包含 quiet zone 在内的预览模块边长，用于让上层判断
 // 当前终端网格是否足够完整呈现二维码。
 func (p *Prepared) PreviewModules() int {
-	return len(p.bitmap) + quietZoneModules*2
+	return p.totalModules()
 }
 
 // PreviewFit 会按当前终端预览画布放大二维码矩阵；当画布不足时保持原始模块
@@ -154,7 +165,7 @@ func (p *Prepared) PreviewFit(maxWidth, maxHeight int) string {
 		return ""
 	}
 
-	total := len(p.bitmap) + quietZoneModules*2
+	total := p.totalModules()
 	capacity := max(1, min(maxWidth, maxHeight*2))
 	var target int
 	switch {
@@ -175,6 +186,9 @@ func (p *Prepared) PreviewFit(maxWidth, maxHeight int) string {
 			target = capacity
 		}
 	}
+	if target == total {
+		return p.Preview()
+	}
 	return p.renderHalfBlockPreview(target, target)
 }
 
@@ -187,19 +201,14 @@ func (p *Prepared) Raster() image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, p.request.Size, p.request.Size))
 	fill(img, color.White)
 
-	total := len(p.bitmap) + quietZoneModules*2
+	total := p.totalModules()
 	for y := 0; y < total; y++ {
 		startY, endY := band(y, p.request.Size, total)
 		for x := 0; x < total; x++ {
-			startX, endX := band(x, p.request.Size, total)
-			active := false
-			srcY, srcX := y-quietZoneModules, x-quietZoneModules
-			if srcY >= 0 && srcY < len(p.bitmap) && srcX >= 0 && srcX < len(p.bitmap[srcY]) {
-				active = p.bitmap[srcY][srcX]
-			}
-			if !active {
+			if !p.moduleActive(y, x) {
 				continue
 			}
+			startX, endX := band(x, p.request.Size, total)
 			for py := startY; py < endY; py++ {
 				for px := startX; px < endX; px++ {
 					img.Set(px, py, color.Black)
@@ -254,14 +263,7 @@ func (p *Prepared) bytesForFormat(format core.Format) ([]byte, error) {
 }
 
 func (p *Prepared) previewModule(y, x int) bool {
-	srcY, srcX := y-quietZoneModules, x-quietZoneModules
-	if srcY < 0 || srcY >= len(p.bitmap) {
-		return false
-	}
-	if srcX < 0 || srcX >= len(p.bitmap[srcY]) {
-		return false
-	}
-	return p.bitmap[srcY][srcX]
+	return p.moduleActive(y, x)
 }
 
 func (p *Prepared) renderHalfBlockPreview(targetWidth, targetModulesHeight int) string {
@@ -298,7 +300,7 @@ func (p *Prepared) previewGrid(targetWidth, targetHeight int) [][]bool {
 		grid[y] = make([]bool, targetWidth)
 	}
 
-	total := len(p.bitmap) + quietZoneModules*2
+	total := p.totalModules()
 	for srcY := 0; srcY < total; srcY++ {
 		startY, endY := band(srcY, targetHeight, total)
 		if startY == endY {
@@ -354,6 +356,14 @@ func band(index, size, total int) (int, int) {
 	return start, end
 }
 
+func (p *Prepared) totalModules() int {
+	return bitmapModules(p.bitmap)
+}
+
+func bitmapModules(bitmap [][]bool) int {
+	return len(bitmap) + quietZoneModules*2
+}
+
 // fill 会在绘制深色模块之前初始化 PNG 画布背景。
 func fill(img *image.RGBA, c color.Color) {
 	for y := img.Rect.Min.Y; y < img.Rect.Max.Y; y++ {
@@ -380,22 +390,17 @@ func toECOption(level core.Level) qrcode.EncodeOption {
 // RequiredModules 返回指定内容和纠错等级在预览中的模块边长（包含 quiet zone）。
 // 这个值可用于判断当前终端网格是否能完整显示并扫码。
 func RequiredModules(content string, level core.Level) (int, error) {
-	qr, err := qrcode.NewWith(content, toECOption(level))
+	bitmap, err := bitmapFor(content, level)
 	if err != nil {
 		return 0, err
 	}
-
-	capture := &captureWriter{}
-	if err := qr.Save(capture); err != nil {
-		return 0, err
-	}
-	return len(capture.bitmap) + quietZoneModules*2, nil
+	return bitmapModules(bitmap), nil
 }
 
 // validateSize 在真正开始导出前拒绝过小尺寸，避免生成视觉上存在但实际无
 // 法扫码的图像。
 func validateSize(req core.NormalizedRequest, bitmap [][]bool) error {
-	minSize := len(bitmap) + quietZoneModules*2
+	minSize := bitmapModules(bitmap)
 	if req.Size >= minSize {
 		return nil
 	}
@@ -404,6 +409,19 @@ func validateSize(req core.NormalizedRequest, bitmap [][]bool) error {
 		Kind:    core.ErrorSizeTooSmall,
 		Message: fmt.Sprintf("size must be at least %d for this content", minSize),
 	}
+}
+
+func bitmapFor(content string, level core.Level) ([][]bool, error) {
+	qr, err := qrcode.NewWith(content, toECOption(level))
+	if err != nil {
+		return nil, err
+	}
+
+	capture := &captureWriter{}
+	if err := qr.Save(capture); err != nil {
+		return nil, err
+	}
+	return capture.bitmap, nil
 }
 
 // captureWriter 提取二维码库生成的位图，让应用的其余部分掌握实际渲染路径。

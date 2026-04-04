@@ -91,6 +91,7 @@ Common controls:
 
 - `Tab` / `Shift+Tab` move focus
 - `Ctrl+S` saves
+- `Ctrl+R` resets all settings to defaults
 - `Ctrl+T` cycles `AUTO / LIGHT / DARK`
 - `Enter` inserts a newline in content and saves when `Save` is focused
 - mouse focus switching and terminal paste events are supported
@@ -101,6 +102,7 @@ Preview behavior:
 - `mods X/Y` shows current module count versus preview capacity
 - small terminals show `native preview exceeds viewport; enlarge terminal`
 - dense previews can suggest a lower correction level, such as `suggest M for scan`
+- long content (> 500 chars) shows `content long` warning, > 1000 chars shows `content very long`
 
 Environment variable:
 

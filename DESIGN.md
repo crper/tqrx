@@ -136,6 +136,7 @@ Avoid:
 - In the content field, `Enter` always inserts a newline.
 - Saving is an explicit action from the Save control.
 - `Ctrl+S` is allowed as a global save shortcut.
+- `Ctrl+R` resets all settings to defaults (content, format, size, level, output path).
 - `Ctrl+T` cycles theme mode.
 - Focus order follows workflow:
   - content
@@ -183,6 +184,9 @@ Avoid:
 - Preview contrast should stay pure black on white to preserve scanner robustness under different terminal themes.
 - For high-density codes near viewport limits, prefer integer-module scaling over slight non-integer stretching.
 - When over capacity, provide a lower error-correction recommendation for preview scanning (suggestion only, no silent level mutation).
+- Content length warnings appear in preview metadata:
+  - `content long` for > 500 characters
+  - `content very long` for > 1000 characters
 - The preview is a strong main actor, but it should stay restrained:
   - no decorative drama
   - no gratuitous animation

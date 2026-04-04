@@ -197,6 +197,26 @@ func TestPreparePreviewKeepsQuietZonePadding(t *testing.T) {
 	}
 }
 
+func TestPreviewFitReturnsBasePreviewAtNativeSize(t *testing.T) {
+	req, err := core.Normalize(core.Request{
+		Content: "native preview",
+		Source:  core.SourceCLIArg,
+	})
+	if err != nil {
+		t.Fatalf("Normalize() error = %v", err)
+	}
+
+	prepared, err := NewEngine().Prepare(req)
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+
+	modules := prepared.PreviewModules()
+	if got := prepared.PreviewFit(modules, modules); got != prepared.Preview() {
+		t.Fatalf("PreviewFit() = %q, want cached base preview %q", got, prepared.Preview())
+	}
+}
+
 func TestPreviewFitKeepsNativeModulesWhenViewportTooSmall(t *testing.T) {
 	req, err := core.Normalize(core.Request{
 		Content: "https://example.com/very/long/path/for/a/denser/preview",

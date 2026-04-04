@@ -96,12 +96,12 @@ func parseArgs(args []string, stdout, stderr io.Writer) (rootCLI, string, error)
 
 func parseGenerateArgs(args []string, stdout, stderr io.Writer) (rootCLI, string, error) {
 	var cli rootCLI
-	parser, err := kong.New(
+	parser, err := newParser(
+		"tqrx",
+		"Generate QR codes from text or stdin.\n\nSpecial command:\n  tui  Open the interactive terminal UI.",
 		&cli,
-		kong.Name("tqrx"),
-		kong.Description("Generate QR codes from text or stdin.\n\nSpecial command:\n  tui  Open the interactive terminal UI."),
-		kong.UsageOnError(),
-		kong.Writers(stdout, stderr),
+		stdout,
+		stderr,
 	)
 	if err != nil {
 		return rootCLI{}, "", err
@@ -118,13 +118,7 @@ func parseGenerateArgs(args []string, stdout, stderr io.Writer) (rootCLI, string
 // 输出仍由 Kong 统一生成。
 func parseTUIArgs(args []string, stdout, stderr io.Writer) (rootCLI, string, error) {
 	var cli tuiCLI
-	parser, err := kong.New(
-		&cli,
-		kong.Name("tqrx tui"),
-		kong.Description("Open the interactive terminal UI."),
-		kong.UsageOnError(),
-		kong.Writers(stdout, stderr),
-	)
+	parser, err := newParser("tqrx tui", "Open the interactive terminal UI.", &cli, stdout, stderr)
 	if err != nil {
 		return rootCLI{}, "", err
 	}
@@ -133,6 +127,16 @@ func parseTUIArgs(args []string, stdout, stderr io.Writer) (rootCLI, string, err
 		return rootCLI{}, "", err
 	}
 	return rootCLI{}, "tui", nil
+}
+
+func newParser(name, description string, target any, stdout, stderr io.Writer) (*kong.Kong, error) {
+	return kong.New(
+		target,
+		kong.Name(name),
+		kong.Description(description),
+		kong.UsageOnError(),
+		kong.Writers(stdout, stderr),
+	)
 }
 
 // readInput 把交互式终端视为“没有 stdin”，这样手动调用时会和 TUI

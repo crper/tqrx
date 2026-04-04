@@ -86,28 +86,51 @@ func (m Model) renderNarrowBody(plan layoutPlan) string {
 	)
 }
 
+type editPanelParts struct {
+	title         string
+	composeLabel  string
+	textarea      string
+	settingsLabel string
+	formatRow     string
+	sizeRow       string
+	levelRow      string
+	outputRow     string
+	status        string
+}
+
+func (m Model) editPanelParts() editPanelParts {
+	editFocused := panelHasFocus(m.focus, focusContent, focusFormat, focusSize, focusLevel, focusOutput)
+	return editPanelParts{
+		title:         m.renderPanelTitle("Edit", editFocused),
+		composeLabel:  m.renderSectionLabel("Compose", m.focus == focusContent),
+		textarea:      m.renderTextareaSurface(),
+		settingsLabel: m.renderSectionLabel("Settings", editFocused),
+		formatRow:     m.renderSettingChipRow("Format", formatChoiceLabels[:], strings.ToLower(string(m.format)), m.focus == focusFormat),
+		sizeRow:       m.renderSettingInputRow("Size", m.renderTextInputSurface(m.size), m.focus == focusSize),
+		levelRow:      m.renderSettingChipRow("Level", levelChoiceLabels[:], string(m.level), m.focus == focusLevel),
+		outputRow:     m.renderSettingInputRow("Output", m.renderTextInputSurface(m.output), m.focus == focusOutput),
+		status:        m.renderInlineStatus("Status", m.pathStatus, false),
+	}
+}
+
 func (m Model) renderEditPanel(width int) string {
 	editFocused := panelHasFocus(m.focus, focusContent, focusFormat, focusSize, focusLevel, focusOutput)
-	body := lipgloss.JoinVertical(
-		lipgloss.Left,
-		m.renderPanelTitle("Edit", editFocused),
-		m.renderSectionLabel("Compose", m.focus == focusContent),
-		m.renderTextareaSurface(),
+	parts := m.editPanelParts()
+	lines := []string{
+		parts.title,
+		parts.composeLabel,
+		parts.textarea,
 		"",
-		m.renderSectionLabel("Settings", panelHasFocus(m.focus, focusFormat, focusSize, focusLevel, focusOutput)),
-		m.renderSettingChipRow("Format", []string{"png", "svg"}, strings.ToLower(string(m.format)), m.focus == focusFormat),
-		m.renderSettingInputRow("Size", m.renderTextInputSurface(m.size), m.focus == focusSize),
-		m.renderSettingChipRow("Level", []string{"L", "M", "Q", "H"}, string(m.level), m.focus == focusLevel),
-		m.renderSettingInputRow("Output", m.renderTextInputSurface(m.output), m.focus == focusOutput),
-	)
-	if m.pathStatus.Message != "" {
-		body = lipgloss.JoinVertical(
-			lipgloss.Left,
-			body,
-			"",
-			m.renderInlineStatus("Status", m.pathStatus, false),
-		)
+		parts.settingsLabel,
+		parts.formatRow,
+		parts.sizeRow,
+		parts.levelRow,
+		parts.outputRow,
 	}
+	if m.pathStatus.Message != "" {
+		lines = append(lines, "", parts.status)
+	}
+	body := lipgloss.JoinVertical(lipgloss.Left, lines...)
 	return m.panelStyle(editFocused).Width(width).Render(body)
 }
 
@@ -307,11 +330,11 @@ func (m Model) renderPanelTitle(title string, focused bool) string {
 func (m Model) renderStatusBadge(status statusModel) string {
 	text := statusText(status)
 	switch status.Kind {
-	case "waiting":
+	case statusWaiting:
 		return m.styles.statusWaiting.Render("[" + text + "]")
-	case "error":
+	case statusError:
 		return m.styles.statusError.Render("[" + text + "]")
-	case "success":
+	case statusSuccess:
 		return m.styles.statusSuccess.Render("[" + text + "]")
 	default:
 		return m.styles.statusReady.Render("[" + text + "]")
@@ -322,11 +345,11 @@ func (m Model) renderHeaderStatusBadge(status statusModel) string {
 	text := statusText(status)
 	style := m.styles.headerChip
 	switch status.Kind {
-	case "waiting":
+	case statusWaiting:
 		style = style.Foreground(m.theme.warning).Bold(true)
-	case "error":
+	case statusError:
 		style = style.Foreground(m.theme.danger).Bold(true)
-	case "success":
+	case statusSuccess:
 		style = style.Foreground(m.theme.success).Bold(true)
 	default:
 		style = style.Foreground(m.theme.muted)
@@ -475,12 +498,7 @@ func (m Model) recommendedScanLevel(capacity int) (core.Level, bool) {
 		return "", false
 	}
 
-	for _, level := range []core.Level{
-		core.LevelHigh,
-		core.LevelQuart,
-		core.LevelMedium,
-		core.LevelLow,
-	} {
+	for _, level := range descendingLevelOrder {
 		modules, ok := m.levelModules[level]
 		if !ok {
 			continue

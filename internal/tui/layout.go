@@ -68,13 +68,13 @@ func (m Model) planLayout() layoutPlan {
 			x: left,
 			y: top,
 			w: width,
-			h: m.editPanelHeight(),
+			h: lipgloss.Height(m.renderEditPanel(width)),
 		}
 		plan.previewPanel = rect{
 			x: left,
 			y: plan.editPanel.y + plan.editPanel.h + 1,
 			w: width,
-			h: m.previewPanelHeight(width),
+			h: lipgloss.Height(m.renderPreviewPanel(width)),
 		}
 		contentRect, controlsRect, rows := m.editRects(plan.editPanel)
 		plan.rects = layoutRects{
@@ -95,13 +95,13 @@ func (m Model) planLayout() layoutPlan {
 		x: left,
 		y: top,
 		w: leftWidth,
-		h: m.editPanelHeight(),
+		h: lipgloss.Height(m.renderEditPanel(leftWidth)),
 	}
 	plan.previewPanel = rect{
 		x: left + leftWidth,
 		y: top,
 		w: previewWidth,
-		h: m.previewPanelHeight(previewWidth),
+		h: lipgloss.Height(m.renderPreviewPanel(previewWidth)),
 	}
 
 	contentRect, controlsRect, rows := m.editRects(plan.editPanel)
@@ -117,26 +117,6 @@ func (m Model) planLayout() layoutPlan {
 
 func (m Model) layoutRects() layoutRects {
 	return m.planLayout().rects
-}
-
-func (m Model) editPanelHeight() int {
-	bodyHeight := 1 + 1 + m.content.Height() + 1 + 1 + 1 + 1 + 1 + 1
-	if m.pathStatus.Message != "" {
-		bodyHeight += 3
-	}
-	return bodyHeight + panelFrameHeight
-}
-
-func (m Model) previewPanelHeight(width int) int {
-	bodyHeight := 1 + m.previewMetaLineCount(width) + m.previewCanvasHeight()
-	if shouldShowPreviewInlineStatus(m.previewStatus) {
-		bodyHeight += 2
-	}
-	return bodyHeight + panelFrameHeight
-}
-
-func (m Model) previewCanvasHeight() int {
-	return m.preview.Height() + m.styles.previewCanvas.GetVerticalFrameSize()
 }
 
 func (m Model) previewMetaLineCount(width int) int {
@@ -164,9 +144,23 @@ func (m Model) previewMetaContent() previewMetaContent {
 	if summary := m.previewScanSummary(); summary != "" {
 		parts = append(parts, summary)
 	}
+	if warning := m.contentWarningMessage(); warning != "" {
+		parts = append(parts, warning)
+	}
 	return previewMetaContent{
 		infoParts: parts,
 		path:      m.output.Value(),
+	}
+}
+
+func (m Model) contentWarningMessage() string {
+	switch m.contentWarning {
+	case core.WarningCritical:
+		return "content very long"
+	case core.WarningHigh:
+		return "content long"
+	default:
+		return ""
 	}
 }
 
@@ -186,11 +180,12 @@ func (m Model) editRects(panel rect) (rect, rect, controlRects) {
 	innerX := panel.x + 1 + panelPaddingX
 	innerY := panel.y + 1 + panelPaddingY
 	innerWidth := max(0, panel.w-panelFrameWidth)
+	parts := m.editPanelParts()
 
 	y := innerY
-	y += lipgloss.Height(m.renderPanelTitle("Edit", panelHasFocus(m.focus, focusContent, focusFormat, focusSize, focusLevel, focusOutput)))
+	y += lipgloss.Height(parts.title)
 
-	contentHeight := lipgloss.Height(m.renderSectionLabel("Compose", m.focus == focusContent)) + lipgloss.Height(m.content.View())
+	contentHeight := lipgloss.Height(parts.composeLabel) + lipgloss.Height(parts.textarea)
 	contentRect := rect{
 		x: innerX,
 		y: y,
@@ -199,14 +194,14 @@ func (m Model) editRects(panel rect) (rect, rect, controlRects) {
 	}
 	y += contentRect.h + 1
 
-	settingsHeadingHeight := lipgloss.Height(m.renderSectionLabel("Settings", panelHasFocus(m.focus, focusFormat, focusSize, focusLevel, focusOutput)))
+	settingsHeadingHeight := lipgloss.Height(parts.settingsLabel)
 	y += settingsHeadingHeight
 
 	formatRow := rect{
 		x: innerX,
 		y: y,
 		w: innerWidth,
-		h: lipgloss.Height(m.renderSettingChipRow("Format", []string{"png", "svg"}, strings.ToLower(string(m.format)), m.focus == focusFormat)),
+		h: lipgloss.Height(parts.formatRow),
 	}
 	y += formatRow.h
 
@@ -214,7 +209,7 @@ func (m Model) editRects(panel rect) (rect, rect, controlRects) {
 		x: innerX,
 		y: y,
 		w: innerWidth,
-		h: lipgloss.Height(m.renderSettingInputRow("Size", m.size.View(), m.focus == focusSize)),
+		h: lipgloss.Height(parts.sizeRow),
 	}
 	y += sizeRow.h
 
@@ -222,7 +217,7 @@ func (m Model) editRects(panel rect) (rect, rect, controlRects) {
 		x: innerX,
 		y: y,
 		w: innerWidth,
-		h: lipgloss.Height(m.renderSettingChipRow("Level", []string{"L", "M", "Q", "H"}, string(m.level), m.focus == focusLevel)),
+		h: lipgloss.Height(parts.levelRow),
 	}
 	y += levelRow.h
 
@@ -230,7 +225,7 @@ func (m Model) editRects(panel rect) (rect, rect, controlRects) {
 		x: innerX,
 		y: y,
 		w: innerWidth,
-		h: lipgloss.Height(m.renderSettingInputRow("Output", m.output.View(), m.focus == focusOutput)),
+		h: lipgloss.Height(parts.outputRow),
 	}
 
 	rows := controlRects{
@@ -244,7 +239,7 @@ func (m Model) editRects(panel rect) (rect, rect, controlRects) {
 
 	controlsHeight := settingsHeadingHeight + formatRow.h + sizeRow.h + levelRow.h + outputRow.h
 	if m.pathStatus.Message != "" {
-		controlsHeight += 1 + lipgloss.Height(m.renderInlineStatus("Status", m.pathStatus, false))
+		controlsHeight += 1 + lipgloss.Height(parts.status)
 	}
 	controlsRect := rect{
 		x: innerX,
@@ -268,38 +263,28 @@ func (m Model) previewSaveButtonRect(panel rect) rect {
 }
 
 func (m Model) formatChipRects(row rect) []formatChipRect {
-	first := m.renderChoiceChip("png", m.format == core.FormatPNG, m.focus == focusFormat)
-	second := m.renderChoiceChip("svg", m.format == core.FormatSVG, m.focus == focusFormat)
-	return []formatChipRect{
-		{
-			rect:   m.rowChipRect(row, 0, first),
-			format: core.FormatPNG,
-		},
-		{
-			rect:   m.rowChipRect(row, lipgloss.Width(first)+1, second),
-			format: core.FormatSVG,
-		},
+	rects := make([]formatChipRect, 0, len(formatChoices))
+	x := 0
+	for _, format := range formatChoices {
+		label := strings.ToLower(string(format))
+		rendered := m.renderChoiceChip(label, m.format == format, m.focus == focusFormat)
+		rects = append(rects, formatChipRect{
+			rect:   m.rowChipRect(row, x, rendered),
+			format: format,
+		})
+		x += lipgloss.Width(rendered) + 1
 	}
+	return rects
 }
 
 func (m Model) levelChipRects(row rect) []levelChipRect {
-	labels := []struct {
-		level core.Level
-		label string
-	}{
-		{level: core.LevelLow, label: "L"},
-		{level: core.LevelMedium, label: "M"},
-		{level: core.LevelQuart, label: "Q"},
-		{level: core.LevelHigh, label: "H"},
-	}
-
-	rects := make([]levelChipRect, 0, len(labels))
+	rects := make([]levelChipRect, 0, len(levelOrder))
 	x := 0
-	for _, label := range labels {
-		rendered := m.renderChoiceChip(label.label, m.level == label.level, m.focus == focusLevel)
+	for _, level := range levelOrder {
+		rendered := m.renderChoiceChip(string(level), m.level == level, m.focus == focusLevel)
 		rects = append(rects, levelChipRect{
 			rect:  m.rowChipRect(row, x, rendered),
-			level: label.level,
+			level: level,
 		})
 		x += lipgloss.Width(rendered) + 1
 	}

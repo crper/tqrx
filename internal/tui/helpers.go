@@ -11,6 +11,21 @@ import (
 	"github.com/crper/tqrx/internal/core"
 )
 
+var (
+	levelOrder = [...]core.Level{
+		core.LevelLow,
+		core.LevelMedium,
+		core.LevelQuart,
+		core.LevelHigh,
+	}
+	descendingLevelOrder = [...]core.Level{
+		core.LevelHigh,
+		core.LevelQuart,
+		core.LevelMedium,
+		core.LevelLow,
+	}
+)
+
 // nextFocus / prevFocus 维持一个稳定的环形焦点顺序，让 tab 和 shift+tab
 // 在所有交互区之间可预期地循环。
 func nextFocus(current focusTarget) focusTarget {
@@ -39,36 +54,36 @@ func nextThemeMode(current uiThemeMode) uiThemeMode {
 	}
 }
 
+func isCycleKey(msg tea.KeyPressMsg) bool {
+	switch msg.Code {
+	case tea.KeyLeft, tea.KeyRight, tea.KeyEnter:
+		return true
+	default:
+		return msg.Text == " "
+	}
+}
+
 // applyFormatCycle 和 applyLevelCycle 把键盘“循环选择”规则收敛成独立函数，
 // 避免 Update 里混入太多控件细节。
 func applyFormatCycle(msg tea.KeyPressMsg, format *core.Format) bool {
-	switch msg.Code {
-	case tea.KeyLeft, tea.KeyRight, tea.KeyEnter:
-	default:
-		if msg.Text != " " {
-			return false
-		}
+	if !isCycleKey(msg) {
+		return false
 	}
-	if *format == core.FormatPNG {
-		*format = core.FormatSVG
+	if *format == formatChoices[0] {
+		*format = formatChoices[1]
 		return true
 	}
-	*format = core.FormatPNG
+	*format = formatChoices[0]
 	return true
 }
 
 func applyLevelCycle(msg tea.KeyPressMsg, level *core.Level) bool {
-	switch msg.Code {
-	case tea.KeyLeft, tea.KeyRight, tea.KeyEnter:
-	default:
-		if msg.Text != " " {
-			return false
-		}
+	if !isCycleKey(msg) {
+		return false
 	}
 
-	levels := []core.Level{core.LevelLow, core.LevelMedium, core.LevelQuart, core.LevelHigh}
 	current := 0
-	for i, candidate := range levels {
+	for i, candidate := range levelOrder {
 		if candidate == *level {
 			current = i
 			break
@@ -76,11 +91,11 @@ func applyLevelCycle(msg tea.KeyPressMsg, level *core.Level) bool {
 	}
 
 	if msg.Code == tea.KeyLeft {
-		current = (current + len(levels) - 1) % len(levels)
+		current = (current + len(levelOrder) - 1) % len(levelOrder)
 	} else {
-		current = (current + 1) % len(levels)
+		current = (current + 1) % len(levelOrder)
 	}
-	*level = levels[current]
+	*level = levelOrder[current]
 	return true
 }
 
@@ -111,7 +126,7 @@ func shouldShowPreviewInlineStatus(status statusModel) bool {
 	if status.Message == "" {
 		return false
 	}
-	return status.Kind == "error"
+	return status.Kind == statusError
 }
 
 // humanizeError 把 core/render/os 层的错误统一翻译成适合终端界面展示的文

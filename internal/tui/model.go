@@ -41,6 +41,12 @@ const (
 	focusSave
 )
 
+var (
+	formatChoices      = [...]core.Format{core.FormatPNG, core.FormatSVG}
+	formatChoiceLabels = [...]string{"png", "svg"}
+	levelChoiceLabels  = [...]string{"L", "M", "Q", "H"}
+)
+
 // rect 是鼠标命中测试和布局计算共享的最小矩形单元。
 type rect struct {
 	x int
@@ -85,8 +91,17 @@ type levelChipRect struct {
 }
 
 // statusModel 描述预览区、路径状态和页脚共用的轻量状态文案。
+type statusKind string
+
+const (
+	statusReady   statusKind = "ready"
+	statusWaiting statusKind = "waiting"
+	statusError   statusKind = "error"
+	statusSuccess statusKind = "success"
+)
+
 type statusModel struct {
-	Kind    string
+	Kind    statusKind
 	Symbol  string
 	Message string
 }
@@ -114,6 +129,7 @@ type keyMap struct {
 	PrevFocus   key.Binding
 	Cycle       key.Binding
 	Save        key.Binding
+	Reset       key.Binding
 	ToggleTheme key.Binding
 	Quit        key.Binding
 }
@@ -136,6 +152,10 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("ctrl+s"),
 			key.WithHelp("ctrl+s", "save"),
 		),
+		Reset: key.NewBinding(
+			key.WithKeys("ctrl+r"),
+			key.WithHelp("ctrl+r", "reset"),
+		),
 		ToggleTheme: key.NewBinding(
 			key.WithKeys("ctrl+t"),
 			key.WithHelp("ctrl+t", "theme"),
@@ -148,11 +168,11 @@ func defaultKeyMap() keyMap {
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.NextFocus, k.PrevFocus, k.Cycle, k.Save, k.ToggleTheme, k.Quit}
+	return []key.Binding{k.NextFocus, k.PrevFocus, k.Cycle, k.Save, k.Reset, k.ToggleTheme, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.NextFocus, k.PrevFocus, k.Cycle, k.Save, k.ToggleTheme, k.Quit}}
+	return [][]key.Binding{{k.NextFocus, k.PrevFocus, k.Cycle, k.Save, k.Reset, k.ToggleTheme, k.Quit}}
 }
 
 // uiStyles 把不同视觉语义拆成明确字段，避免渲染层直接拼样式细节。
@@ -226,9 +246,10 @@ type Model struct {
 	levelModules        map[core.Level]int
 	levelModulesContent string
 
-	previewStatus statusModel
-	pathStatus    statusModel
-	footerStatus  statusModel
+	previewStatus  statusModel
+	pathStatus     statusModel
+	footerStatus   statusModel
+	contentWarning core.ContentWarning
 
 	pendingPreviewID int
 	debounce         time.Duration
@@ -257,8 +278,8 @@ func NewModel(engine *render.Engine) Model {
 	size.SetWidth(20)
 
 	output := textinput.New()
-	output.Placeholder = "./qrcode.png"
-	output.SetValue("./qrcode.png")
+	output.Placeholder = core.DefaultOutputPath(core.FormatPNG)
+	output.SetValue(core.DefaultOutputPath(core.FormatPNG))
 	output.SetWidth(32)
 
 	preview := viewport.New(
@@ -291,7 +312,7 @@ func NewModel(engine *render.Engine) Model {
 		height:        40,
 		outputDerived: true,
 		themeMode:     themeMode,
-		previewStatus: statusModel{Kind: "ready", Message: "Ready"},
+		previewStatus: statusModel{Kind: statusReady, Message: "Ready"},
 		debounce:      120 * time.Millisecond,
 	}
 

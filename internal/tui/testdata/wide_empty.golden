@@ -38,4 +38,4 @@
                                      │  └─────────────────────────────────────────────────────────────────────────┘  │
                                      └───────────────────────────────────────────────────────────────────────────────┘
                                        [Save QR]  auto-fit live preview
- tab next • shift+tab prev • ←/→ cycle • ctrl+s save • ctrl+t theme • ctrl+c quit
+ tab next • shift+tab prev • ←/→ cycle • ctrl+s save • ctrl+r reset • ctrl+t theme • ctrl+c quit

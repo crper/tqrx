@@ -63,7 +63,7 @@ func TestPasteMsgInContentUpdatesTextarea(t *testing.T) {
 	if got.content.Value() != "第一行\n第二行" {
 		t.Fatalf("content = %q, want pasted content", got.content.Value())
 	}
-	if got.previewStatus.Kind != "waiting" {
+	if got.previewStatus.Kind != statusWaiting {
 		t.Fatalf("preview status kind = %q, want waiting after paste", got.previewStatus.Kind)
 	}
 }
@@ -327,10 +327,10 @@ func TestPreviewErrorUpdatesMetadataAndFooter(t *testing.T) {
 	updated, _ := next.(Model).Update(msg)
 	got := updated.(Model)
 
-	if got.previewStatus.Kind != "error" {
+	if got.previewStatus.Kind != statusError {
 		t.Fatalf("preview status kind = %q, want error", got.previewStatus.Kind)
 	}
-	if got.footerStatus.Kind != "error" {
+	if got.footerStatus.Kind != statusError {
 		t.Fatalf("footer status kind = %q, want error", got.footerStatus.Kind)
 	}
 	if !strings.Contains(got.previewStatus.Message, "Size must be square") {
@@ -411,7 +411,7 @@ func TestPreviewErrorClearsStalePreview(t *testing.T) {
 	if got.previewText != "" {
 		t.Fatalf("preview = %q, want empty preview after error", got.previewText)
 	}
-	if got.previewStatus.Kind != "error" {
+	if got.previewStatus.Kind != statusError {
 		t.Fatalf("preview status kind = %q, want error", got.previewStatus.Kind)
 	}
 }
@@ -421,7 +421,7 @@ func TestWaitingStatusDoesNotChangePreviewPanelHeight(t *testing.T) {
 
 	readyHeight := lipgloss.Height(model.renderPreviewPanel(69))
 
-	model.previewStatus = statusModel{Kind: "waiting", Symbol: "…", Message: "Updating"}
+	model.previewStatus = statusModel{Kind: statusWaiting, Symbol: "…", Message: "Updating"}
 	waitingHeight := lipgloss.Height(model.renderPreviewPanel(69))
 
 	if waitingHeight != readyHeight {
@@ -666,7 +666,7 @@ func TestCtrlSSavesFromContentFocus(t *testing.T) {
 	if _, err := os.Stat(target); err != nil {
 		t.Fatalf("expected %s to exist: %v", target, err)
 	}
-	if got.pathStatus.Kind != "success" {
+	if got.pathStatus.Kind != statusSuccess {
 		t.Fatalf("path status kind = %q, want success", got.pathStatus.Kind)
 	}
 }
@@ -797,6 +797,42 @@ func TestMouseWheelOverPreviewFocusesAndScrolls(t *testing.T) {
 	}
 }
 
+func TestEditRectsUseRenderedEditPanelParts(t *testing.T) {
+	model := sizedModel(t, 120, 40)
+	model.pathStatus = statusModel{Kind: statusSuccess, Symbol: "✓", Message: "Saved to ./qrcode.png"}
+
+	plan := model.planLayout()
+	parts := model.editPanelParts()
+	rects := plan.rects
+
+	if got, want := rects.content.h, lipgloss.Height(parts.composeLabel)+lipgloss.Height(parts.textarea); got != want {
+		t.Fatalf("content rect height = %d, want %d", got, want)
+	}
+	if got, want := rects.controlRows.format.h, lipgloss.Height(parts.formatRow); got != want {
+		t.Fatalf("format row height = %d, want %d", got, want)
+	}
+	if got, want := rects.controlRows.size.h, lipgloss.Height(parts.sizeRow); got != want {
+		t.Fatalf("size row height = %d, want %d", got, want)
+	}
+	if got, want := rects.controlRows.level.h, lipgloss.Height(parts.levelRow); got != want {
+		t.Fatalf("level row height = %d, want %d", got, want)
+	}
+	if got, want := rects.controlRows.output.h, lipgloss.Height(parts.outputRow); got != want {
+		t.Fatalf("output row height = %d, want %d", got, want)
+	}
+
+	controlsWant := lipgloss.Height(parts.settingsLabel) +
+		lipgloss.Height(parts.formatRow) +
+		lipgloss.Height(parts.sizeRow) +
+		lipgloss.Height(parts.levelRow) +
+		lipgloss.Height(parts.outputRow) +
+		1 +
+		lipgloss.Height(parts.status)
+	if got := rects.controls.h; got != controlsWant {
+		t.Fatalf("controls rect height = %d, want %d", got, controlsWant)
+	}
+}
+
 func TestLayoutPlanMatchesRenderedPanels(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -819,8 +855,8 @@ func TestLayoutPlanMatchesRenderedPanels(t *testing.T) {
 			width:  120,
 			height: 40,
 			adjust: func(model *Model) {
-				model.pathStatus = statusModel{Kind: "success", Symbol: "✓", Message: "Saved to ./qrcode.png"}
-				model.previewStatus = statusModel{Kind: "error", Symbol: "!", Message: "Can't write to this path."}
+				model.pathStatus = statusModel{Kind: statusSuccess, Symbol: "✓", Message: "Saved to ./qrcode.png"}
+				model.previewStatus = statusModel{Kind: statusError, Symbol: "!", Message: "Can't write to this path."}
 			},
 		},
 		{
