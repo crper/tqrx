@@ -1,7 +1,6 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -122,11 +121,6 @@ func (e *UserError) Unwrap() error {
 		return nil
 	}
 	return e.Cause
-}
-
-// AsUserError 是一个小工具函数，用于提取面向用户的校验错误。
-func AsUserError(err error, target **UserError) bool {
-	return errors.As(err, target)
 }
 
 // Request 表示在默认值填充和校验之前，从 CLI 标志或 TUI 控件收集到的原始

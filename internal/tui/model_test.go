@@ -44,8 +44,8 @@ func TestEnterInContentAddsNewlineInsteadOfSaving(t *testing.T) {
 	next, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Text: "\n"})
 	got := next.(Model)
 
-	if strings.Contains(got.pathStatus.Message, "Saved to") {
-		t.Fatalf("path status = %q, want no save message", got.pathStatus.Message)
+	if strings.Contains(got.saveStatus.Message, "Saved to") {
+		t.Fatalf("save status = %q, want no save message", got.saveStatus.Message)
 	}
 	if got.focus != focusContent {
 		t.Fatalf("focus = %v, want %v", got.focus, focusContent)
@@ -330,8 +330,8 @@ func TestPreviewErrorUpdatesMetadataAndFooter(t *testing.T) {
 	if got.previewStatus.Kind != statusError {
 		t.Fatalf("preview status kind = %q, want error", got.previewStatus.Kind)
 	}
-	if got.footerStatus.Kind != statusError {
-		t.Fatalf("footer status kind = %q, want error", got.footerStatus.Kind)
+	if got.saveStatus.Message != "" {
+		t.Fatalf("save status = %q, want empty save feedback on preview error", got.saveStatus.Message)
 	}
 	if !strings.Contains(got.previewStatus.Message, "Size must be square") {
 		t.Fatalf("preview status = %q, want size guidance", got.previewStatus.Message)
@@ -341,10 +341,10 @@ func TestPreviewErrorUpdatesMetadataAndFooter(t *testing.T) {
 	}
 }
 
-func TestPreparePreviewCmdReusesLevelModuleCacheForSameContent(t *testing.T) {
+func TestLevelModulesForContentClonesCachedMap(t *testing.T) {
 	model := NewModel(render.NewEngine())
-	model.content.SetValue("cache me")
-	model.levelModulesContent = "cache me"
+	content := "cache me"
+	model.levelModulesContent = content
 	model.levelModules = map[core.Level]int{
 		core.LevelLow:    91,
 		core.LevelMedium: 92,
@@ -352,25 +352,38 @@ func TestPreparePreviewCmdReusesLevelModuleCacheForSameContent(t *testing.T) {
 		core.LevelHigh:   94,
 	}
 
-	cmd := model.preparePreviewCmd(7)
-	if cmd == nil {
-		t.Fatal("preparePreviewCmd() = nil, want previewReadyMsg command")
-	}
-
-	msg, ok := cmd().(previewReadyMsg)
-	if !ok {
-		t.Fatalf("preparePreviewCmd() message = %T, want previewReadyMsg", cmd())
-	}
+	modules := model.levelModulesForContent(content)
 
 	for level, want := range model.levelModules {
-		if got := msg.levelModules[level]; got != want {
-			t.Fatalf("preparePreviewCmd() %s modules = %d, want cached value %d", level, got, want)
+		if got := modules[level]; got != want {
+			t.Fatalf("levelModulesForContent() %s modules = %d, want cached value %d", level, got, want)
 		}
 	}
 
-	msg.levelModules[core.LevelLow] = 0
+	modules[core.LevelLow] = 0
 	if got := model.levelModules[core.LevelLow]; got != 91 {
 		t.Fatalf("cached level modules mutated to %d, want original value 91", got)
+	}
+}
+
+func TestPasteMsgInContentRefreshesDraftAnalysis(t *testing.T) {
+	model := NewModel(render.NewEngine())
+	model.focus = focusContent
+	model.applyFocus()
+
+	content := strings.Repeat("x", core.ContentLengthWarning+1)
+
+	next, _ := model.Update(tea.PasteMsg{Content: content})
+	got := next.(Model)
+
+	if got := core.CheckContentLength(got.levelModulesContent); got != core.WarningHigh {
+		t.Fatalf("CheckContentLength(levelModulesContent) = %q, want %q", got, core.WarningHigh)
+	}
+	if got.levelModulesContent != content {
+		t.Fatalf("levelModulesContent = %q, want pasted content", got.levelModulesContent)
+	}
+	if len(got.levelModules) == 0 {
+		t.Fatal("levelModules = empty, want populated draft analysis cache")
 	}
 }
 
@@ -392,7 +405,6 @@ func TestPreviewErrorClearsStalePreview(t *testing.T) {
 
 	model.prepared = prepared
 	model.previewText = prepared.Preview()
-	model.previewProto = "Matrix"
 	model.syncPreviewViewport()
 	model.pendingPreviewID = 3
 
@@ -413,6 +425,40 @@ func TestPreviewErrorClearsStalePreview(t *testing.T) {
 	}
 	if got.previewStatus.Kind != statusError {
 		t.Fatalf("preview status kind = %q, want error", got.previewStatus.Kind)
+	}
+}
+
+func TestPreviewErrorKeepsDraftAnalysis(t *testing.T) {
+	model := sizedModel(t, 120, 40)
+	content := strings.Repeat("x", core.ContentLengthWarning+1)
+	model.content.SetValue(content)
+	model.levelModules = collectLevelModules(content)
+	model.levelModulesContent = content
+	model.size.SetValue("100x200")
+	model.pendingPreviewID = 1
+
+	next, cmd := model.Update(previewTickMsg{id: 1})
+	if cmd == nil {
+		t.Fatal("previewTick cmd = nil, want follow-up previewReadyMsg")
+	}
+
+	msg := cmd()
+	updated, _ := next.(Model).Update(msg)
+	got := updated.(Model)
+
+	if got := core.CheckContentLength(got.levelModulesContent); got != core.WarningHigh {
+		t.Fatalf("CheckContentLength(levelModulesContent) = %q, want %q after preview error", got, core.WarningHigh)
+	}
+	if got.levelModulesContent != content {
+		t.Fatalf("levelModulesContent = %q, want original content after preview error", got.levelModulesContent)
+	}
+	if len(got.levelModules) == 0 {
+		t.Fatal("levelModules = empty, want draft analysis cache retained after preview error")
+	}
+
+	meta := ansi.Strip(got.renderPreviewMeta(90))
+	if !strings.Contains(meta, "content long") {
+		t.Fatalf("renderPreviewMeta() = %q, want retained content warning", meta)
 	}
 }
 
@@ -442,7 +488,6 @@ func TestPreviewMetaSharesSingleAdaptiveRailWhenWide(t *testing.T) {
 		t.Fatalf("Prepare() error = %v", err)
 	}
 	model.prepared = prepared
-	model.previewProto = "Matrix"
 	model.syncPreviewViewport()
 
 	meta := ansi.Strip(model.renderPreviewMeta(90))
@@ -473,7 +518,6 @@ func TestPreviewMetaWrapsLongWidePath(t *testing.T) {
 		t.Fatalf("Prepare() error = %v", err)
 	}
 	model.prepared = prepared
-	model.previewProto = "Matrix"
 	model.syncPreviewViewport()
 
 	meta := ansi.Strip(model.renderPreviewMeta(69))
@@ -503,7 +547,6 @@ func TestPreviewMetaSuggestsLowerLevelWhenOverCapacity(t *testing.T) {
 		t.Fatalf("Prepare() error = %v", err)
 	}
 	model.prepared = prepared
-	model.previewProto = "Matrix"
 	model.levelModules = collectLevelModules(req.Content)
 	model.preview.SetWidth(56)
 	model.preview.SetHeight(30)
@@ -514,6 +557,117 @@ func TestPreviewMetaSuggestsLowerLevelWhenOverCapacity(t *testing.T) {
 	}
 	if !strings.Contains(meta, "suggest M for scan") {
 		t.Fatalf("renderPreviewMeta() = %q, want level suggestion for scan", meta)
+	}
+}
+
+func TestPreviewScanSummaryUsesDraftAnalysisWithoutPrepared(t *testing.T) {
+	model := sizedModel(t, 120, 40)
+	content := "scan summary without prepared"
+	model.content.SetValue(content)
+	model.level = core.LevelMedium
+	model.levelModules = collectLevelModules(content)
+	model.levelModulesContent = content
+	model.preview.SetWidth(56)
+	model.preview.SetHeight(30)
+
+	got := model.previewScanSummary()
+	if !strings.Contains(got, "mods ") {
+		t.Fatalf("previewScanSummary() = %q, want module summary without prepared preview", got)
+	}
+}
+
+func TestContentWarningMessageDerivesFromAnalysisContent(t *testing.T) {
+	model := NewModel(render.NewEngine())
+	model.content.SetValue(strings.Repeat("x", core.ContentLengthWarning+1))
+
+	if got := model.contentWarningMessage(); got != "content long" {
+		t.Fatalf("contentWarningMessage() = %q, want %q", got, "content long")
+	}
+}
+
+func TestRenderPreviewMetaShowsMatrixProtocolFromPreparedState(t *testing.T) {
+	model := sizedModel(t, 120, 40)
+	model.content.SetValue("meta protocol")
+
+	req, err := model.currentRequest()
+	if err != nil {
+		t.Fatalf("currentRequest() error = %v", err)
+	}
+	prepared, err := render.NewEngine().Prepare(req)
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+
+	model.prepared = prepared
+	model.syncPreviewViewport()
+
+	meta := ansi.Strip(model.renderPreviewMeta(90))
+	if !strings.Contains(meta, "via Matrix") {
+		t.Fatalf("renderPreviewMeta() = %q, want protocol derived from prepared state", meta)
+	}
+}
+
+func TestPreviewCondensedUsesDraftAnalysisWithoutPrepared(t *testing.T) {
+	model := sizedModel(t, 120, 40)
+	content := strings.Repeat("dense", 40)
+	model.level = core.LevelHigh
+	model.levelModules = collectLevelModules(content)
+	model.levelModulesContent = content
+	model.preview.SetWidth(12)
+	model.preview.SetHeight(6)
+
+	if !model.previewCondensed() {
+		t.Fatal("previewCondensed() = false, want true from draft analysis without prepared preview")
+	}
+}
+
+func TestPasteMsgClearsStalePreviewDuringUpdate(t *testing.T) {
+	engine := render.NewEngine()
+	model := NewModel(engine)
+	model.focus = focusContent
+	model.applyFocus()
+
+	initialReq, err := core.Normalize(core.Request{
+		Content: "old preview",
+		Source:  core.SourceTUI,
+	})
+	if err != nil {
+		t.Fatalf("Normalize(old) error = %v", err)
+	}
+	prepared, err := engine.Prepare(initialReq)
+	if err != nil {
+		t.Fatalf("Prepare(old) error = %v", err)
+	}
+	model.prepared = prepared
+	model.syncPreviewViewport()
+
+	next, _ := model.Update(tea.PasteMsg{Content: strings.Repeat("x", core.ContentLengthWarning+1)})
+	got := next.(Model)
+
+	if got.previewStatus.Kind != statusWaiting {
+		t.Fatalf("preview status kind = %q, want waiting", got.previewStatus.Kind)
+	}
+	if got.prepared != nil {
+		t.Fatalf("prepared = %#v, want nil while waiting for refreshed preview", got.prepared)
+	}
+	if got.previewText != "" {
+		t.Fatalf("previewText = %q, want empty while waiting for refreshed preview", got.previewText)
+	}
+}
+
+func TestPreviewWaitingStateShowsUpdatingCopy(t *testing.T) {
+	model := sizedModel(t, 120, 40)
+	model.content.SetValue("update me")
+	model.previewStatus = statusModel{Kind: statusWaiting, Symbol: "…", Message: "Updating"}
+	model.prepared = nil
+	model.previewText = ""
+
+	doc := ansi.Strip(model.previewDocument(64, 9))
+	if !strings.Contains(doc, "Updating preview...") {
+		t.Fatalf("previewDocument() = %q, want updating copy", doc)
+	}
+	if strings.Contains(doc, "Paste text or a link to render a QR.") {
+		t.Fatalf("previewDocument() = %q, want no empty-state copy while waiting", doc)
 	}
 }
 
@@ -531,7 +685,6 @@ func TestPreviewViewportAutoFitsWithoutScrolling(t *testing.T) {
 		t.Fatalf("Prepare() error = %v", err)
 	}
 	model.prepared = prepared
-	model.previewProto = "Matrix"
 	model.syncPreviewViewport()
 
 	if got := lipgloss.Width(model.previewText); got > model.preview.Width() {
@@ -559,7 +712,6 @@ func TestPreviewFocusHintWarnsWhenPreviewIsCondensed(t *testing.T) {
 		t.Fatalf("Prepare() error = %v", err)
 	}
 	model.prepared = prepared
-	model.previewProto = "Matrix"
 	model.syncPreviewViewport()
 
 	if !model.previewCondensed() {
@@ -584,7 +736,6 @@ func TestViewRendersMultiplePreviewLines(t *testing.T) {
 		t.Fatalf("Prepare() error = %v", err)
 	}
 	model.prepared = prepared
-	model.previewProto = "Matrix"
 	model.syncPreviewViewport()
 
 	var previewLines []string
@@ -633,11 +784,11 @@ func TestFocusedSaveWritesFileAndAnchorsStatus(t *testing.T) {
 	if _, err := os.Stat(target); err != nil {
 		t.Fatalf("expected %s to exist: %v", target, err)
 	}
-	if !strings.Contains(got.pathStatus.Message, "Saved to") {
-		t.Fatalf("path status = %q, want save confirmation", got.pathStatus.Message)
+	if !strings.Contains(got.saveStatus.Message, "Saved to") {
+		t.Fatalf("save status = %q, want save confirmation", got.saveStatus.Message)
 	}
-	if !strings.Contains(got.footerStatus.Message, "Saved to") {
-		t.Fatalf("footer status = %q, want save confirmation", got.footerStatus.Message)
+	if !strings.Contains(got.footerMessage(), "Saved to") {
+		t.Fatalf("footer = %q, want save confirmation", got.footerMessage())
 	}
 	view := plainView(got.View())
 	if !strings.Contains(view, "✓ Saved to "+target) {
@@ -666,8 +817,8 @@ func TestCtrlSSavesFromContentFocus(t *testing.T) {
 	if _, err := os.Stat(target); err != nil {
 		t.Fatalf("expected %s to exist: %v", target, err)
 	}
-	if got.pathStatus.Kind != statusSuccess {
-		t.Fatalf("path status kind = %q, want success", got.pathStatus.Kind)
+	if got.saveStatus.Kind != statusSuccess {
+		t.Fatalf("save status kind = %q, want success", got.saveStatus.Kind)
 	}
 }
 
@@ -799,7 +950,7 @@ func TestMouseWheelOverPreviewFocusesAndScrolls(t *testing.T) {
 
 func TestEditRectsUseRenderedEditPanelParts(t *testing.T) {
 	model := sizedModel(t, 120, 40)
-	model.pathStatus = statusModel{Kind: statusSuccess, Symbol: "✓", Message: "Saved to ./qrcode.png"}
+	model.saveStatus = statusModel{Kind: statusSuccess, Symbol: "✓", Message: "Saved to ./qrcode.png"}
 
 	plan := model.planLayout()
 	parts := model.editPanelParts()
@@ -855,7 +1006,7 @@ func TestLayoutPlanMatchesRenderedPanels(t *testing.T) {
 			width:  120,
 			height: 40,
 			adjust: func(model *Model) {
-				model.pathStatus = statusModel{Kind: statusSuccess, Symbol: "✓", Message: "Saved to ./qrcode.png"}
+				model.saveStatus = statusModel{Kind: statusSuccess, Symbol: "✓", Message: "Saved to ./qrcode.png"}
 				model.previewStatus = statusModel{Kind: statusError, Symbol: "!", Message: "Can't write to this path."}
 			},
 		},
@@ -866,7 +1017,6 @@ func TestLayoutPlanMatchesRenderedPanels(t *testing.T) {
 			adjust: func(model *Model) {
 				model.output.SetValue("/tmp/二维码导出/这是一个特别特别长的输出路径-用于验证预览元信息换行是否稳定并且和布局估算一致.png")
 				model.outputDerived = false
-				model.previewProto = "Matrix"
 			},
 		},
 		{
@@ -887,7 +1037,6 @@ func TestLayoutPlanMatchesRenderedPanels(t *testing.T) {
 				}
 
 				model.prepared = prepared
-				model.previewProto = "Matrix"
 				model.levelModules = collectLevelModules(req.Content)
 				model.syncPreviewViewport()
 			},

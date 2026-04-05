@@ -1,0 +1,36 @@
+# 文档对 tqrx 很重要，因为 CLI/TUI 的行为约定都靠 README / DESIGN / CONTRIBUTING 讲清楚。
+# 这个模板专门收集“文档没跟上实现”或“说明太难懂”的问题。
+name: Docs improvement
+description: Report a docs gap, confusing example, or missing explanation.
+title: "[Docs] "
+labels:
+  - documentation
+body:
+  # 先锁定是哪份文档，避免维护者先到处猜位置。
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected document
+      options:
+        - README.md
+        - README.en.md
+        - CONTRIBUTING.md
+        - DESIGN.md
+        - CLI help output
+        - Release notes or packaging docs
+    validations:
+      required: true
+  # 这里强调“哪里看不懂”，不是让反馈者直接写整段新文档。
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is confusing or missing?
+      placeholder: The TUI preview rules explain scan hints, but they do not mention what happens while the preview is updating.
+    validations:
+      required: true
+  # 如果已经想到更好的写法，可以直接给一个最小建议。
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Suggested improvement
+      placeholder: Add one sentence to the preview rules saying that stale previews are cleared while the new preview is recomputed.

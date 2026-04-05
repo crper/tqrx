@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"image/color"
 	_ "image/png"
@@ -403,7 +404,7 @@ func TestPrepareRejectsSizesThatCannotRenderEveryModule(t *testing.T) {
 	}
 
 	var userErr *core.UserError
-	if !core.AsUserError(err, &userErr) {
+	if !errors.As(err, &userErr) {
 		t.Fatalf("Prepare() error = %T, want *core.UserError", err)
 	}
 	if userErr.Kind != core.ErrorSizeTooSmall {

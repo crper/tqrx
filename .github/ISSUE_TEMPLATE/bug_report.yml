@@ -1,9 +1,13 @@
+# 这个模板用于用户报告“已经发生并且能复现”的问题。
+# tqrx 主要有 CLI 生成、TUI 编辑、预览/导出、发布打包几类路径，
+# 所以下面的字段会强制把问题放回具体工作流里描述。
 name: Bug report
 description: Report a reproducible bug in tqrx.
 title: "[Bug] "
 labels:
   - bug
 body:
+  # 先用一句话说清楚现象和预期，方便 triage 时快速判断优先级。
   - type: textarea
     id: summary
     attributes:
@@ -12,6 +16,22 @@ body:
       placeholder: Running `tqrx tui` exits immediately on macOS 15.
     validations:
       required: true
+  # 小工具的 bug 往往和具体入口强相关，这里先锁定出问题的工作流。
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected workflow
+      description: Which part of tqrx is failing?
+      options:
+        - CLI generate command
+        - TUI workbench
+        - PNG or SVG export
+        - Preview or scan hints
+        - Docs or examples
+        - Release or packaging
+    validations:
+      required: true
+  # 这里要求给出精确命令、输入和按键，是因为 CLI/TUI 的问题很容易卡在“我以为你按的是这个”。
   - type: textarea
     id: steps
     attributes:
@@ -22,17 +42,35 @@ body:
         2. Observe the error or output
     validations:
       required: true
+  # 实际结果和预期结果拆开写，能明显减少来回追问。
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Paste the exact stderr output, terminal behavior, or wrong file result.
+      placeholder: The TUI shows `Updating` forever and never redraws the preview.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What should have happened instead?
+      placeholder: The preview should refresh within one debounce cycle and remain scannable.
+    validations:
+      required: true
+  # 环境信息对终端 UI、图像导出和打包问题都很关键。
   - type: textarea
     id: environment
     attributes:
       label: Environment
-      description: Include OS, Go version, and terminal if relevant.
-      placeholder: macOS 15, Go 1.26.1, iTerm2
+      description: Include OS, install method, and terminal if relevant.
+      placeholder: macOS 15, Homebrew install, iTerm2
     validations:
       required: true
+  # 日志和截图不是必填，但能大幅提高定位速度。
   - type: textarea
     id: logs
     attributes:
       label: Logs or screenshots
       description: Paste stderr output or attach terminal screenshots when useful.
-

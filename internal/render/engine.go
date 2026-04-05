@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -95,13 +96,14 @@ func (p *Prepared) SVG() ([]byte, error) {
 		p.request.Size, p.request.Size, p.request.Size, p.request.Size)
 	fmt.Fprintf(&buf, `<rect width="%d" height="%d" fill="#ffffff"/>`, p.request.Size, p.request.Size)
 
-	for y := 0; y < total; y++ {
-		startY, endY := band(y, p.request.Size, total)
-		for x := 0; x < total; x++ {
-			if !p.moduleActive(y, x) {
+	bitmapLen := len(p.bitmap)
+	for y := 0; y < bitmapLen; y++ {
+		startY, endY := band(y+quietZoneModules, p.request.Size, total)
+		for x := 0; x < bitmapLen; x++ {
+			if !p.bitmap[y][x] {
 				continue
 			}
-			startX, endX := band(x, p.request.Size, total)
+			startX, endX := band(x+quietZoneModules, p.request.Size, total)
 			fmt.Fprintf(&buf,
 				`<rect x="%d" y="%d" width="%d" height="%d" fill="#000000"/>`,
 				startX, startY, endX-startX, endY-startY)
@@ -202,13 +204,14 @@ func (p *Prepared) Raster() image.Image {
 	fill(img, color.White)
 
 	total := p.totalModules()
-	for y := 0; y < total; y++ {
-		startY, endY := band(y, p.request.Size, total)
-		for x := 0; x < total; x++ {
-			if !p.moduleActive(y, x) {
+	bitmapLen := len(p.bitmap)
+	for y := 0; y < bitmapLen; y++ {
+		startY, endY := band(y+quietZoneModules, p.request.Size, total)
+		for x := 0; x < bitmapLen; x++ {
+			if !p.bitmap[y][x] {
 				continue
 			}
-			startX, endX := band(x, p.request.Size, total)
+			startX, endX := band(x+quietZoneModules, p.request.Size, total)
 			for py := startY; py < endY; py++ {
 				for px := startX; px < endX; px++ {
 					img.Set(px, py, color.Black)
@@ -262,34 +265,31 @@ func (p *Prepared) bytesForFormat(format core.Format) ([]byte, error) {
 	}
 }
 
-func (p *Prepared) previewModule(y, x int) bool {
-	return p.moduleActive(y, x)
-}
-
 func (p *Prepared) renderHalfBlockPreview(targetWidth, targetModulesHeight int) string {
 	grid := p.previewGrid(targetWidth, targetModulesHeight)
 	charHeight := (targetModulesHeight + 1) / 2
-	lines := make([]string, 0, charHeight)
+	var buf strings.Builder
+	buf.Grow(targetWidth*charHeight + charHeight)
 	for y := 0; y < charHeight; y++ {
-		var b strings.Builder
+		if y > 0 {
+			buf.WriteByte('\n')
+		}
 		for x := 0; x < targetWidth; x++ {
 			top := previewGridModule(grid, x, y*2)
 			bottom := previewGridModule(grid, x, y*2+1)
 			switch {
 			case top && bottom:
-				b.WriteRune('█')
+				buf.WriteRune('█')
 			case top:
-				b.WriteRune('▀')
+				buf.WriteRune('▀')
 			case bottom:
-				b.WriteRune('▄')
+				buf.WriteRune('▄')
 			default:
-				b.WriteRune(' ')
+				buf.WriteRune(' ')
 			}
 		}
-		lines = append(lines, b.String())
 	}
-
-	return strings.Join(lines, "\n")
+	return buf.String()
 }
 
 // previewGrid 会先把二维码模块映射到一个按目标尺寸放大的布尔网格，再由
@@ -307,7 +307,7 @@ func (p *Prepared) previewGrid(targetWidth, targetHeight int) [][]bool {
 			continue
 		}
 		for srcX := 0; srcX < total; srcX++ {
-			if !p.previewModule(srcY, srcX) {
+			if !p.moduleActive(srcY, srcX) {
 				continue
 			}
 			startX, endX := band(srcX, targetWidth, total)
@@ -366,11 +366,7 @@ func bitmapModules(bitmap [][]bool) int {
 
 // fill 会在绘制深色模块之前初始化 PNG 画布背景。
 func fill(img *image.RGBA, c color.Color) {
-	for y := img.Rect.Min.Y; y < img.Rect.Max.Y; y++ {
-		for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
-			img.Set(x, y, c)
-		}
-	}
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: c}, image.Point{}, draw.Src)
 }
 
 // toECOption 把面向用户的纠错等级映射为二维码库使用的枚举值。

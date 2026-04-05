@@ -24,6 +24,7 @@ This repository is a small Go CLI/TUI application for generating QR codes.
 - `go test -race ./...`: verify concurrency safety
 - `go vet ./...`: catch common Go issues
 - `bash scripts/check-docs.sh`: verify docs stay aligned with behavior
+- `lefthook install`: install local Git hooks for format-on-commit and validation-on-push
 
 Run the core validation commands (`go test ./...`, `go vet ./...`, `go build ./...`, `bash scripts/check-docs.sh`) before opening a PR if you change behavior. Run `go test -race ./...` when you touch concurrency-sensitive code.
 

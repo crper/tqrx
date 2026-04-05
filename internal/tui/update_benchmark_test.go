@@ -88,7 +88,6 @@ func BenchmarkPreviewMetaLineCount(b *testing.B) {
 	model.level = req.Level
 	model.size.SetValue("256")
 	model.output.SetValue("/tmp/二维码导出/这是一个特别特别长的输出路径-用于验证预览元信息换行是否稳定并且和布局估算一致.png")
-	model.previewProto = "Matrix"
 	model.levelModules = collectLevelModules(req.Content)
 	model.levelModulesContent = req.Content
 	model.preview.SetWidth(56)

@@ -1,9 +1,12 @@
+# 这个模板用于“还没做，但真实工作流里确实痛”的改进建议。
+# 对 tqrx 这类小而专注的工具，需求越具体越好，所以这里会强调最小可用改动。
 name: Feature request
 description: Suggest an improvement for tqrx.
 title: "[Feature] "
 labels:
   - enhancement
 body:
+  # 先说痛点，不要一上来就堆方案，方便判断值不值得做。
   - type: textarea
     id: problem
     attributes:
@@ -12,6 +15,22 @@ body:
       placeholder: I often need to generate Wi-Fi QR codes without remembering the payload format.
     validations:
       required: true
+  # 把需求落到具体工作流，避免“什么都想顺便优化”的泛化建议。
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Target workflow
+      description: Which area would this improvement affect the most?
+      options:
+        - CLI flags or command UX
+        - TUI editing flow
+        - Preview or scan guidance
+        - PNG or SVG export
+        - Docs or onboarding
+        - Release or packaging
+    validations:
+      required: true
+  # 这里刻意问“最小有用改动”，是为了挡住过度设计。
   - type: textarea
     id: proposal
     attributes:
@@ -20,9 +39,18 @@ body:
       placeholder: Add a `wifi` preset that builds the payload from flags.
     validations:
       required: true
+  # 说清楚是谁受益、为什么受益，有助于排优先级。
+  - type: textarea
+    id: user_value
+    attributes:
+      label: Who benefits and why
+      description: Explain the real workflow this would unblock.
+      placeholder: People sharing Wi-Fi credentials could generate QR codes without manually building the payload string.
+    validations:
+      required: true
+  # 记录已有 workaround 或被拒绝的方向，能减少重复讨论。
   - type: textarea
     id: alternatives
     attributes:
       label: Alternatives considered
       description: Note any workarounds or rejected ideas.
-

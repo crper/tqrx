@@ -159,6 +159,7 @@ Avoid:
 
 - Show a subtle `Updating` cue in the top status strip.
 - Do not replace the whole preview with a loud spinner.
+- Clear stale preview content while waiting; the canvas may show a lightweight updating message, but it must not pretend the old QR still reflects the current draft.
 - Do not insert temporary rows that change preview panel height.
 
 ### Error
@@ -187,6 +188,7 @@ Avoid:
 - Content length warnings appear in preview metadata:
   - `content long` for > 500 characters
   - `content very long` for > 1000 characters
+- Preview metadata should remain tied to the current draft, not to preview success; validation errors must not wipe scan hints or content-length warnings.
 - The preview is a strong main actor, but it should stay restrained:
   - no decorative drama
   - no gratuitous animation

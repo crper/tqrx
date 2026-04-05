@@ -24,6 +24,13 @@ var (
 		core.LevelMedium,
 		core.LevelLow,
 	}
+	levelIndex = func() map[core.Level]int {
+		m := make(map[core.Level]int, len(levelOrder))
+		for i, level := range levelOrder {
+			m[level] = i
+		}
+		return m
+	}()
 )
 
 // nextFocus / prevFocus 维持一个稳定的环形焦点顺序，让 tab 和 shift+tab
@@ -82,12 +89,9 @@ func applyLevelCycle(msg tea.KeyPressMsg, level *core.Level) bool {
 		return false
 	}
 
-	current := 0
-	for i, candidate := range levelOrder {
-		if candidate == *level {
-			current = i
-			break
-		}
+	current, ok := levelIndex[*level]
+	if !ok {
+		current = 0
 	}
 
 	if msg.Code == tea.KeyLeft {
@@ -131,31 +135,26 @@ func shouldShowPreviewInlineStatus(status statusModel) bool {
 
 // humanizeError 把 core/render/os 层的错误统一翻译成适合终端界面展示的文
 // 案，尽量避免把内部实现细节直接暴露给用户。
+var userErrorMessages = map[core.ErrorKind]string{
+	core.ErrorEmptyContent:           "Type text or paste a link.",
+	core.ErrorInvalidFormat:          "Format must be png or svg.",
+	core.ErrorInvalidOutputExtension: "Output path must end with .png or .svg.",
+	core.ErrorFormatMismatch:         "Output extension must match the selected format.",
+	core.ErrorInvalidSize:            "Size must be square, like 256 or 256x256.",
+	core.ErrorInvalidLevel:           "Level must be one of L, M, Q, H.",
+}
+
 func humanizeError(err error) string {
 	if err == nil {
 		return ""
 	}
 
 	var userErr *core.UserError
-	if core.AsUserError(err, &userErr) {
-		switch userErr.Kind {
-		case core.ErrorEmptyContent:
-			return "Type text or paste a link."
-		case core.ErrorInvalidFormat:
-			return "Format must be png or svg."
-		case core.ErrorInvalidOutputExtension:
-			return "Output path must end with .png or .svg."
-		case core.ErrorFormatMismatch:
-			return "Output extension must match the selected format."
-		case core.ErrorInvalidSize:
-			return "Size must be square, like 256 or 256x256."
-		case core.ErrorSizeTooSmall:
-			return sentenceCase(userErr.Message)
-		case core.ErrorInvalidLevel:
-			return "Level must be one of L, M, Q, H."
-		default:
-			return sentenceCase(userErr.Message)
+	if errors.As(err, &userErr) {
+		if msg, ok := userErrorMessages[userErr.Kind]; ok {
+			return msg
 		}
+		return sentenceCase(userErr.Message)
 	}
 
 	var pathErr *os.PathError
@@ -170,9 +169,6 @@ func humanizeError(err error) string {
 func sentenceCase(message string) string {
 	if message == "" {
 		return ""
-	}
-	if len(message) == 1 {
-		return strings.ToUpper(message)
 	}
 	head := strings.ToUpper(message[:1])
 	if strings.HasSuffix(message, ".") {

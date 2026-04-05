@@ -95,7 +95,7 @@ func TestNormalizeRejectsMismatchedFormatAndOutputPath(t *testing.T) {
 	}
 
 	var userErr *UserError
-	if !AsUserError(err, &userErr) {
+	if !errors.As(err, &userErr) {
 		t.Fatalf("error = %T, want *UserError", err)
 	}
 	if userErr.Kind != ErrorFormatMismatch {
@@ -114,7 +114,7 @@ func TestNormalizeRejectsUnsupportedOutputExtension(t *testing.T) {
 	}
 
 	var userErr *UserError
-	if !AsUserError(err, &userErr) {
+	if !errors.As(err, &userErr) {
 		t.Fatalf("error = %T, want *UserError", err)
 	}
 	if userErr.Kind != ErrorInvalidOutputExtension {
@@ -161,7 +161,7 @@ func TestNormalizeRejectsWhitespaceOnlyContent(t *testing.T) {
 	}
 
 	var userErr *UserError
-	if !AsUserError(err, &userErr) {
+	if !errors.As(err, &userErr) {
 		t.Fatalf("error = %T, want *UserError", err)
 	}
 	if userErr.Kind != ErrorEmptyContent {
@@ -180,7 +180,7 @@ func TestNormalizeRejectsInvalidSize(t *testing.T) {
 	}
 
 	var userErr *UserError
-	if !AsUserError(err, &userErr) {
+	if !errors.As(err, &userErr) {
 		t.Fatalf("error = %T, want *UserError", err)
 	}
 	if userErr.Kind != ErrorInvalidSize {

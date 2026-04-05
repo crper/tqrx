@@ -103,6 +103,8 @@ printf 'from-pipe\n' | ./tqrx
 - 终端过小会提示 `native preview exceeds viewport; enlarge terminal`
 - 纠错等级过高导致预览过密时，会给出 `suggest M for scan` 这类建议
 - 内容过长时（> 500 字符）会显示 `content long` 警告，超过 1000 字符显示 `content very long`
+- 即使当前输入触发了预览校验错误，预览元信息里的扫描建议和内容长度提示也会继续保留，方便继续调参
+- 输入变化进入 `Updating` 时，不会继续保留旧预览；画布会清掉旧二维码并显示轻量更新提示
 
 环境变量：
 
@@ -118,6 +120,16 @@ go vet ./...
 go build ./...
 bash scripts/check-docs.sh
 ```
+
+提交钩子：
+
+```bash
+go install github.com/evilmartians/lefthook/v2@v2.1.4
+lefthook install
+```
+
+- `pre-commit` 会自动对 staged Go 文件执行 `gofmt -w`
+- `pre-push` 会跑 `go test ./...`、`go vet ./...`、`go build ./...`、`bash scripts/check-docs.sh`
 
 TUI 开发可配合 `air`：
 

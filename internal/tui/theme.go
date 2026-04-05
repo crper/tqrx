@@ -28,7 +28,6 @@ type uiTheme struct {
 	accent        color.Color
 	accentStrong  color.Color
 	appBg         color.Color
-	panelBg       color.Color
 	fieldBg       color.Color
 	canvasBg      color.Color
 	text          color.Color
@@ -77,7 +76,6 @@ func resolveUITheme(mode uiThemeMode, hasDarkBackground bool) uiTheme {
 			accent:        lipgloss.Color("#7AA2F7"),
 			accentStrong:  lipgloss.Color("#7DCFFF"),
 			appBg:         lipgloss.Color("#1A1B26"),
-			panelBg:       lipgloss.Color("#1A1B26"),
 			fieldBg:       lipgloss.Color("#24283B"),
 			canvasBg:      lipgloss.Color("#FFFFFF"),
 			text:          lipgloss.Color("#C0CAF5"),
@@ -103,7 +101,6 @@ func resolveUITheme(mode uiThemeMode, hasDarkBackground bool) uiTheme {
 		accent:        lipgloss.Color("#2E7DE9"),
 		accentStrong:  lipgloss.Color("#2E7DE9"),
 		appBg:         lipgloss.Color("#E9EDF5"),
-		panelBg:       lipgloss.Color("#E9EDF5"),
 		fieldBg:       lipgloss.Color("#DCE4F2"),
 		canvasBg:      lipgloss.Color("#FFFFFF"),
 		text:          lipgloss.Color("#2E3440"),

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	_ "image/png"
 	"os"
@@ -102,7 +103,7 @@ func TestRunRejectsMismatchedFormatAndOutputExtension(t *testing.T) {
 	}
 
 	var userErr *core.UserError
-	if !core.AsUserError(err, &userErr) {
+	if !errors.As(err, &userErr) {
 		t.Fatalf("Run() error = %T, want *core.UserError", err)
 	}
 	if userErr.Kind != core.ErrorFormatMismatch {
@@ -121,7 +122,7 @@ func TestRunRejectsUnsupportedOutputExtension(t *testing.T) {
 	}
 
 	var userErr *core.UserError
-	if !core.AsUserError(err, &userErr) {
+	if !errors.As(err, &userErr) {
 		t.Fatalf("Run() error = %T, want *core.UserError", err)
 	}
 	if userErr.Kind != core.ErrorInvalidOutputExtension {

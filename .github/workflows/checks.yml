@@ -11,17 +11,28 @@ on:
 permissions:
   contents: read
 
+# GitHub 已经提供 Node 24 LTS 运行时开关；先显式打开，避免继续吃 Node 20 弃用告警。
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   # test 负责“项目能不能正常工作”这条主线：
   # 依赖是否整洁、测试是否通过、能不能构建、文档注释检查是否通过。
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      # checkout 固定到最新 patch tag，减少只跟 major tag 时的漂移。
+      - uses: actions/checkout@v6.0.1
+      # setup-go 同样固定到最新 patch tag，便于复现 CI 环境。
+      - uses: actions/setup-go@v6.0.0
         with:
           # 始终跟随 go.mod 里的 Go 版本，减少本地和 CI 的漂移。
           go-version-file: go.mod
+      # Lefthook 负责本地 git hooks；CI 这里至少要验证配置本身有效。
+      - run: go install github.com/evilmartians/lefthook/v2@v2.1.4
+      - run: lefthook validate
+      # CI 必须兜底格式检查，防止有人绕过本地 hooks 直接提交。
+      - run: test -z "$(gofmt -d .)"
       # go mod tidy + git diff 组合用来防止依赖文件被忘记更新。
       - run: go mod tidy
       - run: git diff --exit-code -- go.mod go.sum
@@ -34,11 +45,12 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v6.0.1
+      - uses: actions/setup-go@v6.0.0
         with:
           go-version-file: go.mod
-      - uses: golangci/golangci-lint-action@v9
+      # golangci-lint-action 固定到最新 patch tag，避免只跟 major tag 时结果飘。
+      - uses: golangci/golangci-lint-action@v9.2.0
         with:
           # 显式固定 golangci-lint 版本，避免 latest 带来突发 breaking change。
           version: v2.11.4
@@ -48,11 +60,11 @@ jobs:
   snapshot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.1
         with:
           # GoReleaser 需要完整历史来推导版本和 changelog。
           fetch-depth: 0
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v6.0.0
         with:
           go-version-file: go.mod
       - uses: goreleaser/goreleaser-action@v7

@@ -6,6 +6,10 @@ on:
     tags:
       - "v*"
 
+# 发布链路同样显式切到 Node 24 LTS runtime，避免继续依赖 Node 20 兼容层。
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   # release 只做一件事：调用 GoReleaser 生成发布产物并推到 GitHub Release，
   # 同时把 Homebrew Cask 同步到独立 tap 仓库。
@@ -15,13 +19,15 @@ jobs:
       # 创建 release、上传产物都需要 contents: write。
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      # release workflow 里也固定 patch tag，避免发布环境和 CI 日常检查漂移。
+      - uses: actions/checkout@v6.0.1
         with:
           # 发布场景同样需要完整 git 历史。
           fetch-depth: 0
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v6.0.0
         with:
           go-version-file: go.mod
+      # goreleaser-action 继续跟仓库当前使用的 v7 major，避免在发布链路里贸然换代。
       - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser

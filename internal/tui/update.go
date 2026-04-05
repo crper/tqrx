@@ -52,15 +52,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.err != nil {
 			status := statusModel{Kind: statusError, Symbol: "!", Message: humanizeError(msg.err)}
-			m.applyPreview(preparedPreview{status: status, footerStatus: status})
+			m.applyPreview(preparedPreview{status: status})
 			return m, nil
 		}
 		m.applyPreview(preparedPreview{
-			prepared:            msg.prepared,
-			levelModules:        msg.levelModules,
-			levelModulesContent: msg.levelModulesContent,
-			status:              statusModel{Kind: statusReady, Message: "Live"},
-			clearErrorFooter:    true,
+			prepared: msg.prepared,
+			status:   statusModel{Kind: statusReady, Message: "Live"},
 		})
 		return m, nil
 
@@ -116,15 +113,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch m.focus {
 		case focusFormat:
-			if applyFormatCycle(msg, &m.format) {
-				m.syncDerivedOutput()
-				return m.afterValueChange(true, false, nil)
+			nextFormat := m.format
+			if applyFormatCycle(msg, &nextFormat) {
+				return m.setFormat(nextFormat, nil)
 			}
 			return m, nil
 
 		case focusLevel:
-			if applyLevelCycle(msg, &m.level) {
-				return m.afterValueChange(true, false, nil)
+			nextLevel := m.level
+			if applyLevelCycle(msg, &nextLevel) {
+				return m.setLevel(nextLevel, nil)
 			}
 			return m, nil
 
@@ -229,7 +227,10 @@ func (m Model) prepareCurrent() (core.NormalizedRequest, *render.Prepared, error
 //	                               applyPreview
 func (m *Model) schedulePreview() tea.Cmd {
 	m.pendingPreviewID++
+	m.prepared = nil
+	m.previewText = ""
 	m.previewStatus = statusModel{Kind: statusWaiting, Symbol: "…", Message: "Updating"}
+	m.syncPreviewViewport()
 	id := m.pendingPreviewID
 	return tea.Tick(m.debounce, func(time.Time) tea.Msg {
 		return previewTickMsg{id: id}
@@ -240,15 +241,13 @@ func (m *Model) schedulePreview() tea.Cmd {
 // 在 Update 同步路径里阻塞输入。
 func (m Model) preparePreviewCmd(id int) tea.Cmd {
 	return func() tea.Msg {
-		req, prepared, err := m.prepareCurrent()
+		_, prepared, err := m.prepareCurrent()
 		if err != nil {
 			return previewReadyMsg{id: id, prepared: prepared, err: err}
 		}
 		return previewReadyMsg{
-			id:                  id,
-			prepared:            prepared,
-			levelModules:        m.levelModulesForContent(req.Content),
-			levelModulesContent: req.Content,
+			id:       id,
+			prepared: prepared,
 		}
 	}
 }
@@ -267,8 +266,7 @@ func (m Model) saveCurrent() (Model, tea.Cmd) {
 	}
 
 	message := fmt.Sprintf("Saved to %s", req.OutputPath)
-	m.pathStatus = statusModel{Kind: statusSuccess, Symbol: "✓", Message: message}
-	m.footerStatus = statusModel{Kind: statusSuccess, Symbol: "✓", Message: message}
+	m.saveStatus = statusModel{Kind: statusSuccess, Symbol: "✓", Message: message}
 	m.applyPreview(preparedPreview{
 		prepared: prepared,
 		status:   statusModel{Kind: statusSuccess, Symbol: "✓", Message: "Synced"},
@@ -288,33 +286,15 @@ func (m *Model) syncDerivedOutput() {
 }
 
 type preparedPreview struct {
-	prepared            *render.Prepared
-	levelModules        map[core.Level]int
-	levelModulesContent string
-	status              statusModel
-	footerStatus        statusModel
-	clearErrorFooter    bool
+	prepared *render.Prepared
+	status   statusModel
 }
 
-// applyPreview 负责把后台准备好的预览结果原子地灌回 model，并维护那些和
-// 预览结果绑定的衍生状态。
+// applyPreview 负责把后台准备好的预览结果原子地灌回 model。
+// 内容分析属于草稿状态，不跟着预览成功或失败一起清空。
 func (m *Model) applyPreview(next preparedPreview) {
 	m.prepared = next.prepared
-	if next.prepared == nil {
-		m.levelModules = nil
-		m.levelModulesContent = ""
-		m.contentWarning = core.WarningNone
-	} else if len(next.levelModules) > 0 {
-		m.levelModules = cloneLevelModules(next.levelModules)
-		m.levelModulesContent = next.levelModulesContent
-		m.contentWarning = core.CheckContentLength(next.levelModulesContent)
-	}
 	m.previewStatus = next.status
-	if next.footerStatus.Message != "" {
-		m.footerStatus = next.footerStatus
-	} else if next.clearErrorFooter && m.footerStatus.Kind == statusError {
-		m.footerStatus = statusModel{}
-	}
 	m.syncPreviewViewport()
 }
 
@@ -337,6 +317,9 @@ func (m Model) updateContent(msg tea.Msg) (Model, tea.Cmd, bool) {
 	before := m.content.Value()
 	var cmd tea.Cmd
 	m.content, cmd = m.content.Update(msg)
+	if m.content.Value() != before {
+		m.refreshDraftAnalysis(m.content.Value())
+	}
 	return m.afterEditableUpdate(m.content.Value() != before, false, cmd)
 }
 
@@ -360,19 +343,33 @@ func (m Model) afterEditableUpdate(changed, explicitOutput bool, cmd tea.Cmd) (M
 	if !changed {
 		return m, cmd, true
 	}
-	next, nextCmd := m.afterValueChange(true, explicitOutput, cmd)
+	next, nextCmd := m.applyDraftChange(explicitOutput, cmd)
 	return next, nextCmd, true
 }
 
-func (m Model) afterValueChange(changed, explicitOutput bool, cmd tea.Cmd) (Model, tea.Cmd) {
-	if !changed {
-		return m, cmd
-	}
+func (m Model) applyDraftChange(explicitOutput bool, cmd tea.Cmd) (Model, tea.Cmd) {
 	if explicitOutput {
 		m.outputDerived = false
 	}
 	m.clearTransientStatuses()
 	return m, tea.Batch(cmd, m.schedulePreview())
+}
+
+func (m Model) setFormat(format core.Format, cmd tea.Cmd) (Model, tea.Cmd) {
+	if m.format == format {
+		return m, cmd
+	}
+	m.format = format
+	m.syncDerivedOutput()
+	return m.applyDraftChange(false, cmd)
+}
+
+func (m Model) setLevel(level core.Level, cmd tea.Cmd) (Model, tea.Cmd) {
+	if m.level == level {
+		return m, cmd
+	}
+	m.level = level
+	return m.applyDraftChange(false, cmd)
 }
 
 func (m *Model) syncPreviewViewport() {
@@ -383,10 +380,8 @@ func (m *Model) syncPreviewViewport() {
 	offset := m.preview.YOffset()
 	if m.prepared != nil {
 		m.previewText = m.prepared.PreviewFit(width, height)
-		m.previewProto = "Matrix"
 	} else {
 		m.previewText = ""
-		m.previewProto = ""
 	}
 	m.preview.SetContent(m.previewDocument(width, height))
 	maxOffset := max(0, m.preview.TotalLineCount()-m.preview.Height())
@@ -394,14 +389,23 @@ func (m *Model) syncPreviewViewport() {
 }
 
 func (m *Model) clearTransientStatuses() {
-	m.pathStatus = statusModel{}
-	m.footerStatus = statusModel{}
+	m.saveStatus = statusModel{}
 }
 
 func (m *Model) setPathError(err error) {
 	status := statusModel{Kind: statusError, Symbol: "!", Message: humanizeError(err)}
-	m.pathStatus = status
-	m.footerStatus = status
+	m.saveStatus = status
+}
+
+func (m *Model) refreshDraftAnalysis(content string) {
+	if strings.TrimSpace(content) == "" {
+		m.levelModules = nil
+		m.levelModulesContent = ""
+		return
+	}
+
+	m.levelModules = m.levelModulesForContent(content)
+	m.levelModulesContent = content
 }
 
 // collectLevelModules 预先计算不同纠错等级在当前内容下需要的模块数，用于
@@ -465,12 +469,9 @@ func (m Model) resetToDefaults() (Model, tea.Cmd) {
 	m.outputDerived = true
 	m.prepared = nil
 	m.previewText = ""
-	m.previewProto = ""
-	m.levelModules = nil
-	m.levelModulesContent = ""
+	m.refreshDraftAnalysis("")
 	m.previewStatus = statusModel{Kind: statusReady, Message: "Ready"}
-	m.pathStatus = statusModel{}
-	m.footerStatus = statusModel{}
+	m.saveStatus = statusModel{}
 	m.focus = focusContent
 
 	return m, tea.Batch(m.applyFocus(), m.schedulePreview())

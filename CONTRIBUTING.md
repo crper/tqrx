@@ -52,10 +52,24 @@ go test ./...
 go vet ./...
 go build ./...
 bash scripts/check-docs.sh
-GOPROXY=https://goproxy.cn,direct go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run --timeout=5m --disable-all --enable=errcheck,govet,staticcheck,ineffassign,unused
+GOPROXY=https://goproxy.cn,direct go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run
 GOPROXY=https://goproxy.cn,direct go run github.com/goreleaser/goreleaser/v2@latest check
 GOPROXY=https://goproxy.cn,direct go run github.com/goreleaser/goreleaser/v2@latest build --snapshot --clean
 ```
+
+本地 Git hooks：
+
+```bash
+go install github.com/evilmartians/lefthook/v2@v2.1.4
+lefthook install
+```
+
+- `pre-commit` 会自动对 staged Go 文件执行 `gofmt -w`
+- `pre-push` 会执行：
+  - `go test ./...`
+  - `go vet ./...`
+  - `go build ./...`
+  - `bash scripts/check-docs.sh`
 
 如果你在验证或维护 release 流程，记得：
 

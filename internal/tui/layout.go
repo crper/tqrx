@@ -138,8 +138,8 @@ func (m Model) previewMetaContent() previewMetaContent {
 	parts := []string{
 		fmt.Sprintf("%s • %s • %spx", strings.ToUpper(string(m.format)), m.level, m.size.Value()),
 	}
-	if m.previewProto != "" {
-		parts = append(parts, "via "+m.previewProto)
+	if m.prepared != nil {
+		parts = append(parts, "via Matrix")
 	}
 	if summary := m.previewScanSummary(); summary != "" {
 		parts = append(parts, summary)
@@ -154,7 +154,7 @@ func (m Model) previewMetaContent() previewMetaContent {
 }
 
 func (m Model) contentWarningMessage() string {
-	switch m.contentWarning {
+	switch core.CheckContentLength(m.content.Value()) {
 	case core.WarningCritical:
 		return "content very long"
 	case core.WarningHigh:
@@ -238,7 +238,7 @@ func (m Model) editRects(panel rect) (rect, rect, controlRects) {
 	}
 
 	controlsHeight := settingsHeadingHeight + formatRow.h + sizeRow.h + levelRow.h + outputRow.h
-	if m.pathStatus.Message != "" {
+	if m.saveStatus.Message != "" {
 		controlsHeight += 1 + lipgloss.Height(parts.status)
 	}
 	controlsRect := rect{
@@ -330,13 +330,7 @@ func (m Model) handleControlClick(x, y int, rows controlRects) (Model, tea.Cmd) 
 		}
 		m.focus = focusFormat
 		focusCmd := m.applyFocus()
-		if m.format == chip.format {
-			return m, focusCmd
-		}
-		m.format = chip.format
-		m.syncDerivedOutput()
-		m.clearTransientStatuses()
-		return m, tea.Batch(focusCmd, m.schedulePreview())
+		return m.setFormat(chip.format, focusCmd)
 	}
 
 	for _, chip := range rows.levelChips {
@@ -345,12 +339,7 @@ func (m Model) handleControlClick(x, y int, rows controlRects) (Model, tea.Cmd) 
 		}
 		m.focus = focusLevel
 		focusCmd := m.applyFocus()
-		if m.level == chip.level {
-			return m, focusCmd
-		}
-		m.level = chip.level
-		m.clearTransientStatuses()
-		return m, tea.Batch(focusCmd, m.schedulePreview())
+		return m.setLevel(chip.level, focusCmd)
 	}
 
 	switch {

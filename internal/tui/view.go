@@ -109,7 +109,7 @@ func (m Model) editPanelParts() editPanelParts {
 		sizeRow:       m.renderSettingInputRow("Size", m.renderTextInputSurface(m.size), m.focus == focusSize),
 		levelRow:      m.renderSettingChipRow("Level", levelChoiceLabels[:], string(m.level), m.focus == focusLevel),
 		outputRow:     m.renderSettingInputRow("Output", m.renderTextInputSurface(m.output), m.focus == focusOutput),
-		status:        m.renderInlineStatus("Status", m.pathStatus, false),
+		status:        m.renderInlineStatus("Status", m.saveStatus, false),
 	}
 }
 
@@ -127,7 +127,7 @@ func (m Model) renderEditPanel(width int) string {
 		parts.levelRow,
 		parts.outputRow,
 	}
-	if m.pathStatus.Message != "" {
+	if m.saveStatus.Message != "" {
 		lines = append(lines, "", parts.status)
 	}
 	body := lipgloss.JoinVertical(lipgloss.Left, lines...)
@@ -235,6 +235,17 @@ func (m Model) previewDocument(width, height int) string {
 			Inherit(line).
 			Foreground(m.theme.emptyNote)
 		blank := line.Render("")
+
+		if m.previewStatus.Kind == statusWaiting && strings.TrimSpace(m.content.Value()) != "" {
+			block := lipgloss.JoinVertical(
+				lipgloss.Left,
+				title.Render("Updating preview..."),
+				blank,
+				note.Render("Keep typing or wait a moment."),
+			)
+			return lipgloss.PlaceVertical(height, lipgloss.Center, block, whitespace)
+		}
+
 		block := lipgloss.JoinVertical(
 			lipgloss.Left,
 			title.Render("Paste text or a link to render a QR."),
@@ -247,12 +258,15 @@ func (m Model) previewDocument(width, height int) string {
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, m.previewText, whitespace)
 }
 
-func (m Model) renderSectionLabel(title string, focused bool) string {
-	style := m.styles.label
+func (m Model) focusedLabel(focused bool) lipgloss.Style {
 	if focused {
-		style = m.styles.labelFocused
+		return m.styles.labelFocused
 	}
-	return style.Render(title)
+	return m.styles.label
+}
+
+func (m Model) renderSectionLabel(title string, focused bool) string {
+	return m.focusedLabel(focused).Render(title)
 }
 
 func (m Model) renderTextareaSurface() string {
@@ -303,8 +317,11 @@ func trimSurfaceOverlay(content string) string {
 }
 
 func (m Model) footerMessage() string {
-	if m.footerStatus.Message != "" {
-		return statusText(m.footerStatus)
+	if m.saveStatus.Message != "" {
+		return statusText(m.saveStatus)
+	}
+	if m.previewStatus.Kind == statusError && m.previewStatus.Message != "" {
+		return statusText(m.previewStatus)
 	}
 	helper := m.help
 	helper.SetWidth(m.width)
@@ -358,11 +375,6 @@ func (m Model) renderHeaderStatusBadge(status statusModel) string {
 }
 
 func (m Model) renderSettingChipRow(label string, options []string, selected string, focused bool) string {
-	labelStyle := m.styles.label
-	if focused {
-		labelStyle = m.styles.labelFocused
-	}
-
 	chips := make([]string, 0, len(options))
 	for _, option := range options {
 		chips = append(chips, m.renderChoiceChip(option, strings.EqualFold(option, selected), focused))
@@ -370,31 +382,23 @@ func (m Model) renderSettingChipRow(label string, options []string, selected str
 
 	return lipgloss.JoinHorizontal(
 		lipgloss.Left,
-		labelStyle.Width(settingsLabelWidth).Render(label),
+		m.focusedLabel(focused).Width(settingsLabelWidth).Render(label),
 		strings.Join(chips, " "),
 	)
 }
 
 func (m Model) renderSettingInputRow(label, field string, focused bool) string {
-	labelStyle := m.styles.label
-	if focused {
-		labelStyle = m.styles.labelFocused
-	}
 	return lipgloss.JoinHorizontal(
 		lipgloss.Left,
-		labelStyle.Width(settingsLabelWidth).Render(label),
+		m.focusedLabel(focused).Width(settingsLabelWidth).Render(label),
 		field,
 	)
 }
 
 func (m Model) renderInlineStatus(label string, status statusModel, focused bool) string {
-	labelStyle := m.styles.label
-	if focused {
-		labelStyle = m.styles.labelFocused
-	}
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		labelStyle.Render(label),
+		m.focusedLabel(focused).Render(label),
 		m.renderStatusBadge(status),
 	)
 }
@@ -450,10 +454,10 @@ func (m Model) previewScrollable() bool {
 }
 
 func (m Model) previewCondensed() bool {
-	if m.prepared == nil {
+	modules, ok := m.currentPreviewModules()
+	if !ok {
 		return false
 	}
-	modules := m.prepared.PreviewModules()
 	capacity := min(m.preview.Width(), m.preview.Height()*2)
 	if capacity <= 0 {
 		return false
@@ -462,14 +466,15 @@ func (m Model) previewCondensed() bool {
 }
 
 func (m Model) previewScanSummary() string {
-	if m.prepared == nil {
-		return ""
-	}
 	capacity := m.previewCapacityModules()
 	if capacity <= 0 {
 		return ""
 	}
-	current := m.prepared.PreviewModules()
+
+	current, ok := m.currentPreviewModules()
+	if !ok {
+		return ""
+	}
 	summary := fmt.Sprintf("mods %d/%d", current, capacity)
 	if current <= capacity {
 		return summary
@@ -486,6 +491,18 @@ func (m Model) previewScanSummary() string {
 
 func (m Model) previewCapacityModules() int {
 	return min(m.preview.Width(), m.preview.Height()*2)
+}
+
+func (m Model) currentPreviewModules() (int, bool) {
+	switch {
+	case m.prepared != nil:
+		return m.prepared.PreviewModules(), true
+	case len(m.levelModules) > 0:
+		modules, ok := m.levelModules[m.level]
+		return modules, ok
+	default:
+		return 0, false
+	}
 }
 
 // recommendedScanLevel 会从高纠错往低纠错寻找“在当前终端还能完整显示”的最

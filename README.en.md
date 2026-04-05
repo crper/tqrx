@@ -103,6 +103,8 @@ Preview behavior:
 - small terminals show `native preview exceeds viewport; enlarge terminal`
 - dense previews can suggest a lower correction level, such as `suggest M for scan`
 - long content (> 500 chars) shows `content long` warning, > 1000 chars shows `content very long`
+- preview metadata keeps scan hints and length warnings visible even when the current draft fails preview validation, so you can keep adjusting without losing context
+- once the draft enters `Updating`, the old QR frame is cleared instead of being kept on screen, and the canvas shows a lightweight updating message
 
 Environment variable:
 
@@ -118,6 +120,16 @@ go vet ./...
 go build ./...
 bash scripts/check-docs.sh
 ```
+
+Git hooks:
+
+```bash
+go install github.com/evilmartians/lefthook/v2@v2.1.4
+lefthook install
+```
+
+- `pre-commit` auto-runs `gofmt -w` on staged Go files
+- `pre-push` runs `go test ./...`, `go vet ./...`, `go build ./...`, and `bash scripts/check-docs.sh`
 
 For TUI iteration with hot reload:
 

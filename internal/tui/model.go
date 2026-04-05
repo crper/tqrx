@@ -116,11 +116,9 @@ type previewTickMsg struct {
 }
 
 type previewReadyMsg struct {
-	id                  int
-	prepared            *render.Prepared
-	levelModules        map[core.Level]int
-	levelModulesContent string
-	err                 error
+	id       int
+	prepared *render.Prepared
+	err      error
 }
 
 // keyMap 集中管理工作台可见的快捷键以及 help 区展示文案。
@@ -242,14 +240,11 @@ type Model struct {
 
 	prepared            *render.Prepared
 	previewText         string
-	previewProto        string
 	levelModules        map[core.Level]int
 	levelModulesContent string
 
-	previewStatus  statusModel
-	pathStatus     statusModel
-	footerStatus   statusModel
-	contentWarning core.ContentWarning
+	previewStatus statusModel
+	saveStatus    statusModel
 
 	pendingPreviewID int
 	debounce         time.Duration

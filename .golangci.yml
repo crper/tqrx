@@ -8,77 +8,27 @@ linters:
     - staticcheck
     - ineffassign
     - unused
+    - bodyclose
+    - misspell
+  settings:
+    misspell:
+      locale: US
+
+formatters:
+  enable:
     - gofmt
     - goimports
-    - prealloc
-    - bodyclose
-    - noctx
-    - revive
-    - gocritic
-    - misspell
-
-linters-settings:
-  gofmt:
-    simplify: true
-  goimports:
-    local-prefixes: github.com/crper/tqrx
-  revive:
-    rules:
-      - name: blank-imports
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: dot-imports
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: exported
-      - name: if-return
-      - name: increment-decrement
-      - name: var-naming
-      - name: var-declaration
-      - name: package-comments
-      - name: range
-      - name: receiver-naming
-      - name: time-naming
-      - name: unexported-return
-      - name: indent-error-flow
-      - name: errorf
-      - name: empty-block
-      - name: superfluous-else
-      - name: unused-parameter
-      - name: unreachable-code
-      - name: redefines-builtin-id
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - dupImport
-      - ifElseChain
-      - octalLiteral
-      - whyNoLint
-      - wrapperFunc
-  misspell:
-    locale: US
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/crper/tqrx
 
 run:
   timeout: 5m
-  skip-dirs:
-    - testdata
 
 issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - dupl
-        - gosec
-        - gochecknoglobals
-    - path: internal/tui/testdata/
-      linters:
-        - all
   max-issues-per-linter: 0
   max-same-issues: 0
   new: false
