@@ -187,6 +187,143 @@ func TestRunRoutesTUICommand(t *testing.T) {
 	}
 }
 
+func TestRunMessageFlagPrintsPreviewToTerminal(t *testing.T) {
+	var stdout bytes.Buffer
+	runner := NewRunner()
+
+	if err := runner.Run([]string{"-m", "hello"}, strings.NewReader(""), &stdout, &stdout); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "█") && !strings.Contains(output, "▀") && !strings.Contains(output, "▄") {
+		t.Fatalf("stdout = %q, want half-block QR preview", output)
+	}
+	if strings.Contains(output, "Saved to") {
+		t.Fatalf("stdout = %q, want no file save confirmation", output)
+	}
+}
+
+func TestRunMessageFlagDoesNotCreateFile(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	var stdout bytes.Buffer
+	runner := NewRunner()
+
+	if err := runner.Run([]string{"-m", "hello"}, strings.NewReader(""), &stdout, &stdout); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	target := filepath.Join(dir, "qrcode.png")
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("expected %s not to exist, but it does", target)
+	}
+}
+
+func TestRunMessageFlagWithLevel(t *testing.T) {
+	var stdout bytes.Buffer
+	runner := NewRunner()
+
+	if err := runner.Run([]string{"-m", "hello", "-l", "H"}, strings.NewReader(""), &stdout, &stdout); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "█") && !strings.Contains(output, "▀") && !strings.Contains(output, "▄") {
+		t.Fatalf("stdout = %q, want half-block QR preview", output)
+	}
+}
+
+func TestRunMessageFlagRejectsEmptyContent(t *testing.T) {
+	runner := NewRunner()
+
+	err := runner.Run([]string{"-m", ""}, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("Run() error = nil, want empty content error")
+	}
+
+	var userErr *core.UserError
+	if !errors.As(err, &userErr) {
+		t.Fatalf("Run() error = %T, want *core.UserError", err)
+	}
+	if userErr.Kind != core.ErrorEmptyContent {
+		t.Fatalf("Run() error kind = %q, want %q", userErr.Kind, core.ErrorEmptyContent)
+	}
+}
+
+func TestRunMessageFlagWithOutputSavesFileAndPrintsPreview(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "qr.png")
+
+	var stdout bytes.Buffer
+	runner := NewRunner()
+
+	if err := runner.Run([]string{"-m", "hello", "-o", target}, strings.NewReader(""), &stdout, &stdout); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "█") && !strings.Contains(output, "▀") && !strings.Contains(output, "▄") {
+		t.Fatalf("stdout = %q, want half-block QR preview", output)
+	}
+	if !strings.Contains(output, "Saved to") {
+		t.Fatalf("stdout = %q, want save confirmation", output)
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("expected %s to exist: %v", target, err)
+	}
+}
+
+func TestRunMessageFlagWithOutputAndFormatSavesCorrectFormat(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "qr.svg")
+
+	var stdout bytes.Buffer
+	runner := NewRunner()
+
+	if err := runner.Run([]string{"-m", "hello", "-o", target, "-f", "svg"}, strings.NewReader(""), &stdout, &stdout); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) error = %v", target, err)
+	}
+	if !strings.Contains(string(data), "<svg") {
+		t.Fatalf("output %q = %q, want SVG data", target, string(data))
+	}
+}
+
+func TestRunMessageFlagTakesPriorityOverPositionalArg(t *testing.T) {
+	var stdout bytes.Buffer
+	runner := NewRunner()
+
+	if err := runner.Run([]string{"-m", "from flag", "from arg"}, strings.NewReader(""), &stdout, &stdout); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	output := stdout.String()
+	if strings.Contains(output, "Saved to") {
+		t.Fatalf("stdout = %q, want terminal preview not file save", output)
+	}
+}
+
+func TestRootHelpShowsMessageFlag(t *testing.T) {
+	cmd := exec.Command("go", "run", ".", "--help")
+	cmd.Dir = filepath.Join("..", "..")
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go run . --help error = %v\noutput:\n%s", err, output)
+	}
+
+	text := string(output)
+	if !strings.Contains(text, "-m") {
+		t.Fatalf("help output = %q, want -m flag", text)
+	}
+}
+
 func TestRunRejectsRemovedGenerateSubcommand(t *testing.T) {
 	runner := NewRunner()
 

@@ -42,9 +42,9 @@ const (
 )
 
 var (
-	formatChoices      = [...]core.Format{core.FormatPNG, core.FormatSVG}
-	formatChoiceLabels = [...]string{"png", "svg"}
-	levelChoiceLabels  = [...]string{"L", "M", "Q", "H"}
+	// formatChoices 列出 TUI 中可切换的导出格式，同时作为 formatLabels
+	// 和 applyFormatCycle 的数据源。
+	formatChoices = [...]core.Format{core.FormatPNG, core.FormatSVG}
 )
 
 // rect 是鼠标命中测试和布局计算共享的最小矩形单元。

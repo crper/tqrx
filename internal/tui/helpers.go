@@ -33,6 +33,26 @@ var (
 	}()
 )
 
+// formatLabels 从 formatChoices 派生小写标签，供 chip 行渲染使用。
+// 作为包级变量预计算，避免每次渲染分配临时切片。
+var formatLabels = func() []string {
+	labels := make([]string, len(formatChoices))
+	for i, f := range formatChoices {
+		labels[i] = strings.ToLower(string(f))
+	}
+	return labels
+}()
+
+// levelLabels 从 levelOrder 派生字符串标签，供 chip 行渲染使用。
+// 作为包级变量预计算，避免每次渲染分配临时切片。
+var levelLabels = func() []string {
+	labels := make([]string, len(levelOrder))
+	for i, l := range levelOrder {
+		labels[i] = string(l)
+	}
+	return labels
+}()
+
 // nextFocus / prevFocus 维持一个稳定的环形焦点顺序，让 tab 和 shift+tab
 // 在所有交互区之间可预期地循环。
 func nextFocus(current focusTarget) focusTarget {

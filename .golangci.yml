@@ -10,9 +10,14 @@ linters:
     - unused
     - bodyclose
     - misspell
+    - revive
   settings:
     misspell:
       locale: US
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
 
 formatters:
   enable:

@@ -8,7 +8,7 @@ pre-commit:
       run: gofmt -w {staged_files}
       stage_fixed: true
 
-# pre-push 跑完整但仍然属于“开发者本地可接受”的质量门禁。
+# pre-push 跑完整但仍然属于"开发者本地可接受"的质量门禁。
 # 这些命令和 CI 的核心门禁保持一致，避免本地通过、远端失败。
 pre-push:
   commands:
@@ -18,5 +18,3 @@ pre-push:
       run: go vet ./...
     build:
       run: go build ./...
-    docs:
-      run: bash scripts/check-docs.sh

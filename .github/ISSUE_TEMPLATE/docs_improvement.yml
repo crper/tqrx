@@ -13,7 +13,7 @@ body:
       label: Affected document
       options:
         - README.md
-        - README.en.md
+        - README.zh-Hans.md
         - CONTRIBUTING.md
         - DESIGN.md
         - CLI help output

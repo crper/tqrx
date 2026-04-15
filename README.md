@@ -1,18 +1,19 @@
 # tqrx
 
-> 终端优先的二维码生成器，兼顾一条命令出图和可交互预览。
+> A terminal-first QR generator for fast file output and live interactive preview.
 
 [![CI](https://github.com/crper/tqrx/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/crper/tqrx/actions/workflows/checks.yml)
-![Go](https://img.shields.io/badge/Go-1.26.1-00ADD8?logo=go&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.26.1-00ADD8?logo=go\&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-black.svg)
 
-[English](./README.en.md) · [Design](./DESIGN.md) · [Contributing](./CONTRIBUTING.md)
+[中文说明](./README.zh-Hans.md) · [Design](./DESIGN.md) · [Contributing](./CONTRIBUTING.md)
 
-`tqrx` 是一个小而直接的 Go 工具：
+`tqrx` is a small Go tool with two clear workflows:
 
-- `CLI` 适合快速生成 `PNG` / `SVG`
-- `TUI` 适合边改内容边看预览再保存
-- 预览和导出共用同一份二维码渲染结果，减少“界面看着对，导出不一致”的情况
+- `CLI` for generating `PNG` / `SVG` in one command
+- `-m` for printing QR codes directly in the terminal, no file needed
+- `TUI` for editing content, checking preview, and saving in one session
+- one shared render path for preview and export, so behavior stays consistent
 
 ```text
 TQRX  live qr workbench                      [PNG/M] [AUTO] [Ready]
@@ -30,26 +31,27 @@ TQRX  live qr workbench                      [PNG/M] [AUTO] [Ready]
 └──────────────────────────────┘
 ```
 
-如果想先看一遍交互流程，可以直接看下面的演示视频：
+If you want a quick look at the interactive flow, watch the demo below:
 
 https://github.com/user-attachments/assets/286c8d1c-1db2-4a64-a2c5-1a5c01895825
 
 ## Why
 
-- 默认命令就能出图：`tqrx "https://example.com"`
-- 保留交互工作台：`tqrx tui`
-- 明确的输出规则：格式、后缀、尺寸、纠错等级都有统一校验
-- 扫码导向的预览提示：`mods X/Y` 和 `suggest M for scan`
+- fast default path: `tqrx "https://example.com"`
+- print QR code in terminal: `tqrx -m "https://example.com"`
+- interactive path when you want to tune before export: `tqrx tui`
+- stable validation around format, extension, size, and correction level
+- scan-oriented preview hints such as `mods X/Y` and `suggest M for scan`
 
 ## Install
 
-当前最稳的方式是本地构建：
+Today, local build is the most reliable path:
 
 ```bash
 go build -o tqrx .
 ```
 
-首个 release 发布后，可走 Homebrew Cask：
+After the first tagged release, Homebrew Cask is ready for:
 
 ```bash
 brew install --cask crper/tap/tqrx
@@ -58,55 +60,62 @@ brew install --cask crper/tap/tqrx
 ## Quick Start
 
 ```bash
-# 默认导出 PNG
+# default PNG export
 ./tqrx "https://example.com"
 
-# 从 stdin 读取
+# print QR code directly in terminal
+./tqrx -m "https://example.com"
+
+# print in terminal and save to file
+./tqrx -m "hello" -o qr.png
+
+# read from stdin
 printf 'from-pipe\n' | ./tqrx
 
-# 导出 SVG
+# export SVG
 ./tqrx "hello svg" -f svg -s 256 -o hello.svg -l H
 
-# 打开交互式工作台
+# open the interactive workbench
 ./tqrx tui
 ```
 
-命令帮助：
+Help:
 
 ```bash
 ./tqrx --help
 ./tqrx tui --help
 ```
 
-说明：
+Notes:
 
-- 直接把位置参数当作待编码内容
-- `tui` 是保留子命令名；要编码字面量 `tui` 时请用 `./tqrx -- tui`
-- 如果还要传 `-f` / `-o` / `-s` / `-l`，请把这些 flag 放在 `--` 前面，例如 `./tqrx -f svg -o out.svg -- tui`
-- 默认输出为 `./qrcode.png`
+- pass the text to encode as the root positional argument
+- `-m` prints a QR preview in the terminal; combined with `-o`, it also saves the file
+- `tui` is a reserved subcommand name; to encode the literal text, use `./tqrx -- tui`
+- if you also need `-f` / `-o` / `-s` / `-l`, place those flags before `--`, for example `./tqrx -f svg -o out.svg -- tui`
+- the default output path is `./qrcode.png`
 
 ## TUI
 
-常用按键：
+Common controls:
 
-- `Tab` / `Shift+Tab` 切换焦点
-- `Ctrl+S` 保存
-- `Ctrl+R` 重置所有设置为默认值
-- `Ctrl+T` 切换 `AUTO / LIGHT / DARK`
-- `Enter` 在内容区输入换行，在 `Save` 上执行保存
-- 支持鼠标点击切焦点，也支持终端粘贴事件
+- `Tab` / `Shift+Tab` move focus
+- `Ctrl+S` saves
+- `Ctrl+R` resets all settings to defaults
+- `Ctrl+T` cycles `AUTO / LIGHT / DARK`
+- `Enter` inserts a newline in content and saves when `Save` is focused
+- mouse focus switching and terminal paste events are supported
 
-预览规则：
+Preview behavior:
 
-- 预览固定使用高对比黑白画布
-- `mods X/Y` 表示当前二维码模块尺寸与预览容量
-- 终端过小会提示 `native preview exceeds viewport; enlarge terminal`
-- 纠错等级过高导致预览过密时，会给出 `suggest M for scan` 这类建议
-- 内容过长时（> 500 字符）会显示 `content long` 警告，超过 1000 字符显示 `content very long`
-- 即使当前输入触发了预览校验错误，预览元信息里的扫描建议和内容长度提示也会继续保留，方便继续调参
-- 输入变化进入 `Updating` 时，不会继续保留旧预览；画布会清掉旧二维码并显示轻量更新提示
+- the canvas stays high-contrast black on white
+- `mods X/Y` shows current module count versus preview capacity
+- small terminals show `native preview exceeds viewport; enlarge terminal`
+- dense previews can suggest a lower correction level, such as `suggest M for scan`
+- long content (> 500 chars) shows `content long` warning, > 1000 chars shows `content very long`
+- preview metadata keeps scan hints and length warnings visible even when the current draft fails preview validation, so you can keep adjusting without losing context
+- once the draft enters `Updating`, the old QR frame is cleared instead of being kept on screen, and the canvas shows a lightweight updating message
 
-环境变量：
+Environment variable:
 
 ```bash
 TQRX_THEME=auto|light|dark
@@ -118,20 +127,19 @@ TQRX_THEME=auto|light|dark
 go test ./...
 go vet ./...
 go build ./...
-bash scripts/check-docs.sh
 ```
 
-提交钩子：
+Git hooks:
 
 ```bash
 go install github.com/evilmartians/lefthook/v2@v2.1.4
 lefthook install
 ```
 
-- `pre-commit` 会自动对 staged Go 文件执行 `gofmt -w`
-- `pre-push` 会跑 `go test ./...`、`go vet ./...`、`go build ./...`、`bash scripts/check-docs.sh`
+- `pre-commit` auto-runs `gofmt -w` on staged Go files
+- `pre-push` runs `go test ./...`, `go vet ./...`, `go build ./...`
 
-TUI 开发可配合 `air`：
+For TUI iteration with hot reload:
 
 ```bash
 go install github.com/air-verse/air@latest
@@ -140,14 +148,15 @@ air
 
 ## Release
 
-- 推送 `v*` tag 会触发 [`.github/workflows/release.yml`](./.github/workflows/release.yml)
-- 产物由 [`.goreleaser.yml`](./.goreleaser.yml) 构建
-- 当前目标平台为 `darwin/linux/windows` + `amd64/arm64`
-- Homebrew Cask 目标仓库为 `crper/homebrew-tap`
+- pushing a `v*` tag triggers [`.github/workflows/release.yml`](./.github/workflows/release.yml)
+- artifacts are built by [`.goreleaser.yml`](./.goreleaser.yml)
+- current targets are `darwin/linux/windows` + `amd64/arm64`
+- the Homebrew Cask target repository is `crper/homebrew-tap`
 
 ## Docs
 
-- [README.en.md](./README.en.md)
+- [README.zh-Hans.md](./README.zh-Hans.md)
+- [CHANGELOG.md](./CHANGELOG.md)
 - [DESIGN.md](./DESIGN.md)
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
 

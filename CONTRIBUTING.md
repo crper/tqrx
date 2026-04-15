@@ -17,7 +17,7 @@
 建议先看这些文件：
 
 - [README.md](./README.md)
-- [README.en.md](./README.en.md)
+- [README.zh-Hans.md](./README.zh-Hans.md)
 - [DESIGN.md](./DESIGN.md)
 
 如果你要改 TUI，先以 `DESIGN.md` 为准，不要一边写一边重新发明交互规则。
@@ -85,16 +85,14 @@ lefthook install
 2. `go vet ./...` 通过
 3. `go build ./...` 通过
 4. `bash scripts/check-docs.sh` 通过
-5. 如果你改了 CLI / TUI 行为，`README.md`、`README.en.md`、`DESIGN.md` 一起更新
+5. 如果你改了 CLI / TUI 行为，`README.md`、`README.zh-Hans.md`、`DESIGN.md` 一起更新
 
 ## 文档约定
 
-- 中文主文档：
+- 英文主文档：
   - `README.md`
-  - `CONTRIBUTING.md`
-  - `DESIGN.md`
-- 英文入口文档：
-  - `README.en.md`
+- 中文入口文档：
+  - `README.zh-Hans.md`
 - `AGENTS.md` 是仓库本地的代理协作说明；只有当仓库事实、流程或约束变化时才更新
 
 ## 代码风格

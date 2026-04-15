@@ -328,10 +328,10 @@ func (p *Prepared) previewGrid(targetWidth, targetHeight int) [][]bool {
 // previewGridModule 为越界访问提供统一的“空白模块”语义，避免预览绘制在边
 // 缘判断上分散出很多 if。
 func previewGridModule(grid [][]bool, x, y int) bool {
-	if y < 0 || y >= len(grid) {
+	if y >= len(grid) {
 		return false
 	}
-	if x < 0 || x >= len(grid[y]) {
+	if x >= len(grid[y]) {
 		return false
 	}
 	return grid[y][x]
@@ -356,12 +356,15 @@ func band(index, size, total int) (int, int) {
 	return start, end
 }
 
-func (p *Prepared) totalModules() int {
-	return bitmapModules(p.bitmap)
-}
-
+// bitmapModules 返回二维码位图加上 quiet zone 后的模块边长，是预览和导
+// 出共用的模块计数公式。集中在此处避免 len(bitmap)+quietZoneModules*2
+// 在多处重复后因修改不同步而漂移。
 func bitmapModules(bitmap [][]bool) int {
 	return len(bitmap) + quietZoneModules*2
+}
+
+func (p *Prepared) totalModules() int {
+	return bitmapModules(p.bitmap)
 }
 
 // fill 会在绘制深色模块之前初始化 PNG 画布背景。

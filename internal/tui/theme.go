@@ -141,6 +141,14 @@ func newUIStyles(theme uiTheme) uiStyles {
 		BorderForeground(border).
 		Padding(panelPaddingY, panelPaddingX)
 
+	basePreviewCanvas := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		Background(theme.canvasBg).
+		Foreground(theme.qrInk).
+		Padding(0, 1)
+
+	boldStyle := lipgloss.NewStyle().Bold(true)
+
 	return uiStyles{
 		app: lipgloss.NewStyle().
 			Padding(0, 1).
@@ -180,30 +188,12 @@ func newUIStyles(theme uiTheme) uiStyles {
 			Foreground(text),
 		chip: lipgloss.NewStyle().
 			Foreground(muted),
-		chipSelected: lipgloss.NewStyle().
-			Foreground(text).
-			Bold(true),
-		chipSelectedActive: lipgloss.NewStyle().
-			Foreground(accentStrong).
-			Bold(true),
-		saveButton: lipgloss.NewStyle().
-			Foreground(text).
-			Bold(true),
-		saveButtonFocused: lipgloss.NewStyle().
-			Foreground(accentStrong).
-			Bold(true),
-		previewCanvas: lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(canvasBorder).
-			Background(theme.canvasBg).
-			Foreground(theme.qrInk).
-			Padding(0, 1),
-		previewCanvasFocus: lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(accentStrong).
-			Background(theme.canvasBg).
-			Foreground(theme.qrInk).
-			Padding(0, 1),
+		chipSelected:       boldStyle.Foreground(text),
+		chipSelectedActive: boldStyle.Foreground(accentStrong),
+		saveButton:         boldStyle.Foreground(text),
+		saveButtonFocused:  boldStyle.Foreground(accentStrong),
+		previewCanvas:      basePreviewCanvas.BorderForeground(canvasBorder),
+		previewCanvasFocus: basePreviewCanvas.BorderForeground(accentStrong),
 		statusReady: lipgloss.NewStyle().
 			Foreground(muted),
 		statusWaiting: lipgloss.NewStyle().

@@ -86,7 +86,10 @@ func (m Model) renderNarrowBody(plan layoutPlan) string {
 	)
 }
 
+// editPanelParts 汇总编辑面板一次渲染所需的全部片段，避免 renderEditPanel
+// 和 editPanelParts 之间重复计算焦点状态。
 type editPanelParts struct {
+	editFocused   bool
 	title         string
 	composeLabel  string
 	textarea      string
@@ -101,20 +104,20 @@ type editPanelParts struct {
 func (m Model) editPanelParts() editPanelParts {
 	editFocused := panelHasFocus(m.focus, focusContent, focusFormat, focusSize, focusLevel, focusOutput)
 	return editPanelParts{
+		editFocused:   editFocused,
 		title:         m.renderPanelTitle("Edit", editFocused),
 		composeLabel:  m.renderSectionLabel("Compose", m.focus == focusContent),
 		textarea:      m.renderTextareaSurface(),
 		settingsLabel: m.renderSectionLabel("Settings", editFocused),
-		formatRow:     m.renderSettingChipRow("Format", formatChoiceLabels[:], strings.ToLower(string(m.format)), m.focus == focusFormat),
+		formatRow:     m.renderSettingChipRow("Format", formatLabels, strings.ToLower(string(m.format)), m.focus == focusFormat),
 		sizeRow:       m.renderSettingInputRow("Size", m.renderTextInputSurface(m.size), m.focus == focusSize),
-		levelRow:      m.renderSettingChipRow("Level", levelChoiceLabels[:], string(m.level), m.focus == focusLevel),
+		levelRow:      m.renderSettingChipRow("Level", levelLabels, string(m.level), m.focus == focusLevel),
 		outputRow:     m.renderSettingInputRow("Output", m.renderTextInputSurface(m.output), m.focus == focusOutput),
 		status:        m.renderInlineStatus("Status", m.saveStatus, false),
 	}
 }
 
 func (m Model) renderEditPanel(width int) string {
-	editFocused := panelHasFocus(m.focus, focusContent, focusFormat, focusSize, focusLevel, focusOutput)
 	parts := m.editPanelParts()
 	lines := []string{
 		parts.title,
@@ -131,7 +134,7 @@ func (m Model) renderEditPanel(width int) string {
 		lines = append(lines, "", parts.status)
 	}
 	body := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	return m.panelStyle(editFocused).Width(width).Render(body)
+	return m.panelStyle(parts.editFocused).Width(width).Render(body)
 }
 
 func (m Model) renderPreviewPanel(width int) string {
@@ -345,33 +348,42 @@ func (m Model) renderPanelTitle(title string, focused bool) string {
 }
 
 func (m Model) renderStatusBadge(status statusModel) string {
-	text := statusText(status)
-	switch status.Kind {
-	case statusWaiting:
-		return m.styles.statusWaiting.Render("[" + text + "]")
-	case statusError:
-		return m.styles.statusError.Render("[" + text + "]")
-	case statusSuccess:
-		return m.styles.statusSuccess.Render("[" + text + "]")
-	default:
-		return m.styles.statusReady.Render("[" + text + "]")
-	}
+	return m.renderBadgeWithStyles(status, func(kind statusKind) lipgloss.Style {
+		switch kind {
+		case statusWaiting:
+			return m.styles.statusWaiting
+		case statusError:
+			return m.styles.statusError
+		case statusSuccess:
+			return m.styles.statusSuccess
+		default:
+			return m.styles.statusReady
+		}
+	})
 }
 
 func (m Model) renderHeaderStatusBadge(status statusModel) string {
+	return m.renderBadgeWithStyles(status, func(kind statusKind) lipgloss.Style {
+		style := m.styles.headerChip
+		switch kind {
+		case statusWaiting:
+			return style.Foreground(m.theme.warning).Bold(true)
+		case statusError:
+			return style.Foreground(m.theme.danger).Bold(true)
+		case statusSuccess:
+			return style.Foreground(m.theme.success).Bold(true)
+		default:
+			return style.Foreground(m.theme.muted)
+		}
+	})
+}
+
+// renderBadgeWithStyles 是 renderStatusBadge 和 renderHeaderStatusBadge 的
+// 公共实现：通过 styleFor 闭包注入不同场景的样式查找逻辑，消除两处 badge
+// 渲染中重复的文本拼接和 Render 调用。
+func (m Model) renderBadgeWithStyles(status statusModel, styleFor func(statusKind) lipgloss.Style) string {
 	text := statusText(status)
-	style := m.styles.headerChip
-	switch status.Kind {
-	case statusWaiting:
-		style = style.Foreground(m.theme.warning).Bold(true)
-	case statusError:
-		style = style.Foreground(m.theme.danger).Bold(true)
-	case statusSuccess:
-		style = style.Foreground(m.theme.success).Bold(true)
-	default:
-		style = style.Foreground(m.theme.muted)
-	}
-	return style.Render("[" + text + "]")
+	return styleFor(status.Kind).Render("[" + text + "]")
 }
 
 func (m Model) renderSettingChipRow(label string, options []string, selected string, focused bool) string {

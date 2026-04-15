@@ -16,6 +16,9 @@ import (
 
 // Runner 负责顶层命令分发，让 main.go 保持为纯装配代码。
 type Runner struct {
+	// engine 是 CLI 路径共享的渲染引擎，利用单项缓存避免 -m -o 组合下
+	// 重复生成二维码位图。
+	engine *render.Engine
 	// LaunchTUI 通过注入的方式提供，便于测试交互式路径。
 	LaunchTUI func() error
 }
@@ -23,6 +26,7 @@ type Runner struct {
 // rootCLI 描述直接生成二维码时暴露给用户的 flags。
 type rootCLI struct {
 	Content string `arg:"" optional:"" help:"Text content to encode."`
+	Message string `short:"m" help:"Encode text and print QR code to terminal."`
 	Output  string `short:"o" help:"Output path for the generated file."`
 	Format  string `short:"f" help:"Output format (png or svg)."`
 	Size    string `short:"s" help:"Output size (for example 256 or 256x256)."`
@@ -50,6 +54,10 @@ func (r *Runner) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) e
 		return r.LaunchTUI()
 	}
 
+	if strings.TrimSpace(parsed.Message) != "" {
+		return r.renderToTerminal(parsed, stdout)
+	}
+
 	content := parsed.Content
 	source := core.SourceCLIArg
 	if strings.TrimSpace(content) == "" {
@@ -60,20 +68,7 @@ func (r *Runner) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) e
 		source = core.SourceStdin
 	}
 
-	req, err := core.Normalize(core.Request{
-		Content:    content,
-		Format:     parsed.Format,
-		Size:       parsed.Size,
-		OutputPath: parsed.Output,
-		Level:      parsed.Level,
-		Source:     source,
-	})
-	if err != nil {
-		return err
-	}
-
-	engine := render.NewEngine()
-	prepared, err := engine.Prepare(req)
+	prepared, req, err := r.prepareRequest(content, parsed.Format, parsed.Size, parsed.Output, parsed.Level, source)
 	if err != nil {
 		return err
 	}
@@ -82,6 +77,43 @@ func (r *Runner) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) e
 	}
 
 	_, err = fmt.Fprintf(stdout, "Saved to %s\n", req.OutputPath)
+	return err
+}
+
+func (r *Runner) prepareRequest(content, format, size, outputPath, level string, source core.Source) (*render.Prepared, core.NormalizedRequest, error) {
+	req, err := core.Normalize(core.Request{
+		Content:    content,
+		Format:     format,
+		Size:       size,
+		OutputPath: outputPath,
+		Level:      level,
+		Source:     source,
+	})
+	if err != nil {
+		return nil, core.NormalizedRequest{}, err
+	}
+	prepared, err := render.NewEngine().Prepare(req)
+	if err != nil {
+		return nil, core.NormalizedRequest{}, err
+	}
+	return prepared, req, nil
+}
+
+func (r *Runner) renderToTerminal(parsed rootCLI, stdout io.Writer) error {
+	prepared, req, err := r.prepareRequest(parsed.Message, parsed.Format, parsed.Size, parsed.Output, parsed.Level, core.SourceCLIArg)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(stdout, prepared.Preview())
+
+	if parsed.Output != "" {
+		if err := prepared.WriteToPath(req.OutputPath); err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(stdout, "Saved to %s\n", req.OutputPath)
+	}
+
 	return err
 }
 
